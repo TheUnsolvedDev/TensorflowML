@@ -1,173 +1,89 @@
-from tqdm import tqdm
 import tensorflow as tf
 import numpy as np
-import tensorflow_probability as tfp
-import matplotlib.pyplot as plt
-from sklearn.metrics import accuracy_score
-from sklearn import datasets, model_selection
+import tqdm
+
+NUM_DATA = 10_000
+NUM_FEATURES = 10
+TRAIN_RATIO = 0.8
 
 
-def plot_data(x, y, labels, colours):
-    for y_class in np.unique(y):
-        index = np.where(y == y_class)
-        plt.scatter(x[index, 0], x[index, 1],
-                    label=labels[y_class], c=colours[y_class])
-    plt.title("Training set")
-    plt.xlabel("Sepal length (cm)")
-    plt.ylabel("Sepal width (cm)")
-    plt.legend()
+class Dataset:
+    def __init__(self) -> None:
+        self.data = tf.random.normal((NUM_DATA, NUM_FEATURES))
+        self.weight = tf.ones((NUM_FEATURES, 1))
+        self.bias = tf.ones(1)
+
+    def get_data(self):
+        indices = tf.random.shuffle(range(NUM_DATA))
+        result = tf.matmul(self.data, self.weight) + \
+            self.bias + tf.random.normal((NUM_DATA, 1))
+        result = tf.cast(tf.math.sign(result) > 0, dtype=tf.float32)
+        train_data, train_label = tf.gather(self.data, indices[:int(len(
+            result)*TRAIN_RATIO)]), tf.gather(result, indices[:int(len(result)*TRAIN_RATIO)])
+        test_data, test_label = tf.gather(self.data, indices[int(len(
+            result)*TRAIN_RATIO):]), tf.gather(result, indices[int(len(result)*TRAIN_RATIO):])
+        print(len(train_data), len(test_data),train_label.shape)
+        return (train_data, train_label), (test_data, test_label)
 
 
-@tf.function
-def negative_log_likelyhood(dist, x_train, y_train):
-    log_probs = dist.log_prob(x_train)
-    length = len(tf.unique(y_train)[0])
-    y_train = tf.one_hot(y_train, depth=length)
-    return -tf.reduce_mean(log_probs*y_train)
 
+class NaiveBayes:
+    def __init__(self, train_x, train_y):
+        train_x = np.array(train_x)
+        train_y = np.array(train_y).reshape(-1,)
+        self.num_features = len(train_x[0])
+        self.classes = np.unique(train_y)
+        self.class_count = [np.sum(train_y == i) for i in self.classes]
 
-@tf.function
-def get_loss_and_grads(dist, x_train, y_train):
-    with tf.GradientTape() as tape:
-        tape.watch(dist.trainable_variables)
-        loss = negative_log_likelyhood(dist, x_train, y_train)
-        grads = tape.gradient(loss, dist.trainable_variables)
-    return loss, grads
+        self.means = {}
+        self.covars = {}
+        self.priors = {}
 
+        for idx, c in enumerate(self.classes):
+            X_c = train_x[train_y == c]
+            self.means[c] = X_c.mean(axis=0)
+            self.covars[c] = np.cov(X_c, rowvar=False)
+            self.priors[c] = len(X_c)/len(train_x)
 
-def learn_parameters(x, y, mus, scales, optimizer, epochs):
-    nll_loss = []
-    mu_values = []
-    scales_values = []
-    x = tf.cast(np.expand_dims(x, axis=1), tf.float32)
-    dist = tfp.distributions.MultivariateNormalDiag(loc=mus, scale_diag=scales)
-    for epoch in tqdm(range(epochs)):
-        loss, grads = get_loss_and_grads(dist, x, y)
-        optimizer.apply_gradients(zip(grads, dist.trainable_variables))
-        nll_loss.append(loss)
-        mu_values.append(mus.numpy())
-        scales_values.append(scales.numpy())
-    nll_loss, mu_values, scales_values = np.array(
-        nll_loss), np.array(mu_values), np.array(scales_values)
-    return (nll_loss, mu_values, scales_values, dist)
+    def multivariate_gaussian_pdf(self, x, mean, cov_matrix):
+        n = len(mean)
+        x_minus_mean = x - mean
+        cov_inverse = np.linalg.inv(cov_matrix)
+        det_cov = np.linalg.det(cov_matrix)
+        coeff = 1.0 / (np.sqrt((2 * np.pi) ** n * det_cov))
+        exponent = -0.5 * \
+            np.dot(np.dot(x_minus_mean.T, cov_inverse), x_minus_mean)
+        return coeff * np.exp(exponent)
 
-
-def get_prior(y):
-    """
-    This function takes training labels as a numpy array y of shape (num_samples,) as an input,
-    and builds a Categorical Distribution object with empty batch shape and event shape,
-    with the probability of each class.
-    """
-    counts = np.bincount(y)
-    dist = tfp.distributions.Categorical(probs=counts/len(y))
-    return dist
-
-
-def predict_class(prior, class_conditionals, x):
-    def predict_fn(myx):
-        class_probs = class_conditionals.prob(tf.cast(myx, dtype=tf.float32))
-        prior_probs = tf.cast(prior.probs, dtype=tf.float32)
-        class_times_prior_probs = class_probs * prior_probs
-        # Technically, this step
-        Q = tf.reduce_sum(class_times_prior_probs)
-        # and this one, are not necessary.
-        P = tf.math.divide(class_times_prior_probs, Q)
-        Y = tf.cast(tf.argmax(P), dtype=tf.float64)
-        return Y
-    y = tf.map_fn(predict_fn, x)
-    return y
-
-
-def get_meshgrid(x0_range, x1_range, n_points=100):
-    x0 = np.linspace(x0_range[0], x0_range[1], n_points)
-    x1 = np.linspace(x1_range[0], x1_range[1], n_points)
-    return np.meshgrid(x0, x1)
-
-
-def contour_plot(x0_range, x1_range, prob_fn, batch_shape, levels=None, n_points=100):
-    X0, X1 = get_meshgrid(x0_range, x1_range, n_points=n_points)
-    # X0.shape = (100, 100)
-    # X1.shape = (100, 100)
-    X_values = np.expand_dims(np.array([X0.ravel(), X1.ravel()]).T, axis=1)
-    # X_values.shape = (1000, 1, 2)
-    Z = prob_fn(X_values)
-    # Z.shape = (10000, 3)
-    Z = np.array(Z).T.reshape(batch_shape, *X0.shape)
-    # Z.shape = (3, 100, 100)
-    for batch in np.arange(batch_shape):
-        plt.contourf(X0, X1, Z[batch], alpha=0.3, levels=levels)
+    def predict(self, X):
+        X = np.array(X)
+        predictions = []
+        for x in X:
+            class_scores = {}
+            for cls in self.classes:
+                mean = self.means[cls]
+                cov_matrix = self.covars[cls]
+                prior = self.priors[cls]
+                pdf = self.multivariate_gaussian_pdf(x, mean, cov_matrix)
+                class_scores[cls] = pdf * prior
+            predicted_class = max(class_scores, key=class_scores.get)
+            predictions.append(predicted_class)
+        return predictions
+    
+def binary_accuracy(y_true, y_pred):
+    y_pred_binary = tf.cast(tf.math.round(y_pred), dtype=tf.float32)
+    correct_predictions = tf.equal(y_true, y_pred_binary)
+    accuracy = tf.reduce_mean(tf.cast(correct_predictions, dtype=tf.float32))
+    return accuracy.numpy()*100
 
 
 if __name__ == '__main__':
-    # Load the dataset
-    iris = datasets.load_iris()
+    obj = Dataset()
+    train, test = obj.get_data()
 
-    # Use only the first two features: sepal length and width
-    data = iris.data[:, :2]
-    targets = iris.target
-
-    # Randomly shuffle the data and make train and test splits
-    x_train, x_test, y_train, y_test = \
-        model_selection.train_test_split(data, targets, test_size=0.2)
-
-    # Plot the training data
-    labels = {0: 'Setosa', 1: 'Versicolour', 2: 'Virginica'}
-    label_colours = ['blue', 'red', 'green']
-
-    plt.figure(figsize=(8, 5))
-    plot_data(x_train, y_train, labels, label_colours)
-    plt.show()
-
-    mus = tf.Variable([[1., 1.], [1., 1.], [1., 1.]])
-    scales = tf.Variable([[1., 1.], [1., 1.], [1., 1.]])
-    opt = tf.keras.optimizers.Adam(learning_rate=0.005)
-    epochs = 5000*2
-    nlls, mu_arr, scales_arr, class_conditionals = \
-        learn_parameters(x_train, y_train, mus, scales, opt, epochs)
-
-    # Plot the loss and convergence of the standard deviation parameters
-    fig, ax = plt.subplots(1, 3, figsize=(15, 4))
-    ax[0].plot(nlls)
-    ax[0].set_title("Loss vs. epoch")
-    ax[0].set_xlabel("Epoch")
-    ax[0].set_ylabel("Negative log-likelihood")
-    for k in [0, 1, 2]:
-        ax[1].plot(mu_arr[:, k, 0])
-        ax[1].plot(mu_arr[:, k, 1])
-    ax[1].set_title("ML estimates for model's\nmeans vs. epoch")
-    ax[1].set_xlabel("Epoch")
-    ax[1].set_ylabel("Means")
-    for k in [0, 1, 2]:
-        ax[2].plot(scales_arr[:, k, 0])
-        ax[2].plot(scales_arr[:, k, 1])
-    ax[2].set_title("ML estimates for model's\nscales vs. epoch")
-    ax[2].set_xlabel("Epoch")
-    ax[2].set_ylabel("Scales")
-    plt.show()
-
-    x0_range = x_train[:, 0].min(), x_train[:, 0].max()
-    x1_range = x_train[:, 1].min(), x_train[:, 1].max()
-    X0, X1 = get_meshgrid(x0_range, x1_range, n_points=300)
-    X_v = np.expand_dims(np.array([X0.ravel(), X1.ravel()]).T, axis=1)
-    Z = class_conditionals.prob(X_v)
-    Z = np.array(Z).T.reshape(3, *X0.shape)
-
-    print("Class conditional means:")
-    print(class_conditionals.loc.numpy())
-    print("\nClass conditional standard deviations:")
-    print(class_conditionals.stddev().numpy())
-
-    prior = get_prior(y_train)
-    print(prior.probs)
-
-    predictions = predict_class(prior, class_conditionals, x_test)
-    accuracy = accuracy_score(y_test, predictions)
-    print("Test accuracy: {:.4f}".format(accuracy))
-
-    plt.figure(figsize=(10, 6))
-    plot_data(x_train, y_train, labels=labels, colours=label_colours)
-    contour_plot(x0_range, x1_range,
-                 lambda x: predict_class(prior, class_conditionals, x),
-                 1, n_points=3, levels=[-0.5, 0.5, 1.5, 2])
-    plt.title("Training set with decision regions")
-    plt.show()
+    clf = NaiveBayes(train[0],train[1])
+    train_pred = clf.predict(train[0])
+    test_pred = clf.predict(test[0])
+    
+    print('Train Accuracy:',binary_accuracy(train[1],train_pred))
+    print('Test Accuracy:',binary_accuracy(test[1],test_pred))
