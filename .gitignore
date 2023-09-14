@@ -4,3 +4,7 @@
 *.ptx
 *.cubin
 *.fatbin
+*.png
+*.h5
+__pycache__/
+logs/
