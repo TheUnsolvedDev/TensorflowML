@@ -25,11 +25,11 @@ def main_threaded():
         found = False
         for check in not_files:
             if file.find(check) != -1:
-                found = True 
+                found = True
                 break
         if not found:
             files.append(file)
-    
+
     dividings = [[] for _ in range(device_count)]
 
     for i, file in enumerate(files):

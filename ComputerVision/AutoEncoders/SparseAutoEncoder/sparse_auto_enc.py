@@ -23,20 +23,20 @@ callbacks = [
 
 LATENT_DIM = 128
 
-def encoder(shape=(None, 784)):
+def encoder(shape=(784,)):
     inputs = tf.keras.layers.Input(shape)
     x = tf.keras.layers.Dense(LATENT_DIM, activation='relu')(inputs)
     outputs = tf.keras.layers.ActivityRegularization(l1=1e-1)(x)
     return tf.keras.Model(inputs, outputs)
 
 
-def decoder(shape=(None, LATENT_DIM)):
+def decoder(shape=(LATENT_DIM,)):
     inputs = tf.keras.layers.Input(shape)
     outputs = tf.keras.layers.Dense(784, activation='sigmoid')(inputs)
     return tf.keras.Model(inputs, outputs)
 
 
-def autoencoder(shape=(None, 784)):
+def autoencoder(shape=(784,)):
     inputs = tf.keras.layers.Input(shape)
     encoded = encoder()(inputs)
     decoded = decoder()(encoded)

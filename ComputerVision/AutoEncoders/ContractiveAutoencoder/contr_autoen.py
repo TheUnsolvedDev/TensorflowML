@@ -23,23 +23,18 @@ callbacks = [
 ]
 
 
-def encoder(shape=(None, 784)):
+def encoder(shape=(784,)):
     inputs = tf.keras.layers.Input(shape)
-    outputs = tf.keras.layers.Dense(128, activation='sigmoid',name = 'encoded')(inputs)
+    flatten = tf.keras.layers.Flatten()(inputs)
+    outputs = tf.keras.layers.Dense(
+        128, activation='relu')(flatten)
     return tf.keras.Model(inputs, outputs)
 
 
-def decoder(shape=(None, 128)):
+def decoder(shape=(128,)):
     inputs = tf.keras.layers.Input(shape)
     outputs = tf.keras.layers.Dense(784, activation='sigmoid')(inputs)
     return tf.keras.Model(inputs, outputs)
-
-
-def autoencoder(shape=(None, 784)):
-    inputs = tf.keras.layers.Input(shape)
-    encoded = encoder()(inputs)
-    decoded = decoder()(encoded)
-    return tf.keras.Model(inputs, decoded)
 
 
 def process_images(image, label):
@@ -63,23 +58,56 @@ def test(model, test_ds):
         pred = model(image)
         save_images([pred, label], path='Plots/predictions'+str(ind)+'.png')
 
-def loss_contractive(model,lamda = 10):
-    def loss(y_true,y_pred):
-        mse = tf.reduce_mean(tf.square(y_true - y_pred), axis=1)
-        W = tf.Variable(value=model.get_layer('encoded').get_weights()[0])  
-        W = tf.transpose(W)
-        h = model.get_layer('encoded').output
-        dh = h * (1 - h)
-        contractive = lamda * tf.reduce_sum(dh**2 * tf.reduce_sum(W**2, axis=1), axis=1) #uses the last formula
-        return mse + contractive
-    return loss 
+
+class ContractiveAutoEncoder(tf.keras.Model):
+    def __init__(self):
+        super(ContractiveAutoEncoder, self).__init__()
+        self.encoder = encoder()
+        self.decoder = decoder()
+        self.loss_tracker = tf.keras.metrics.Mean(name="train_loss")
+        self.val_loss_tracker = tf.keras.metrics.Mean(name="loss")
+        self.Lambda = 0.1
+
+    def call(self, inputs, training=False):
+        aux_x = self.encoder(inputs)
+        x = self.decoder(aux_x)
+        return x
+
+    @tf.function
+    def train_step(self, data):
+        x, y = data
+        with tf.GradientTape(persistent=True) as tape1:
+            pred = self.call(x, training=True)
+            with tf.GradientTape() as tape2:
+                tape2.watch(x)
+                latent = self.encoder(x)
+            grads_images = tf.reduce_mean(
+                tf.reduce_mean(tf.square(tape2.gradient(latent, x))))
+            loss = tf.keras.losses.mean_squared_error(
+                y, pred) + grads_images*self.Lambda
+
+        grads = tape1.gradient(loss, self.trainable_variables)
+        self.optimizer.apply_gradients(zip(grads, self.trainable_variables))
+        self.loss_tracker.update_state(loss)
+        return {"train_loss": self.loss_tracker.result()}
+
+    @tf.function
+    def test_step(self, data):
+        x, y = data
+        pred = self.call(x, training=False)
+        loss = tf.keras.losses.mean_squared_error(
+            y, pred)
+        self.val_loss_tracker.update_state(loss)
+        return {'loss': self.val_loss_tracker.result()}
+
 
 if __name__ == '__main__':
-    model = autoencoder()
-    model.summary()
+    model = ContractiveAutoEncoder()
+    model.build((None, 784))
+    model.summary(expand_nested=True)
     tf.keras.utils.plot_model(
-        model, to_file=autoencoder.__name__+'.png', show_shapes=True,expand_nested=True)
-    model.compile(optimizer='adam', loss=loss_contractive(model))
+        model, to_file=ContractiveAutoEncoder.__name__+'.png', show_shapes=True, expand_nested=True)
+    model.compile(optimizer='adam')
 
     (train_images, train_labels), (test_images,
                                    test_labels) = tf.keras.datasets.mnist.load_data()
@@ -113,5 +141,6 @@ if __name__ == '__main__':
                      .shuffle(buffer_size=train_ds_size)
                      .batch(batch_size=128, drop_remainder=True))
 
-    model.fit(train_ds, epochs=10, shuffle=True, validation_data=validation_ds,callbacks=callbacks)
+    model.fit(train_ds, epochs=10,
+              validation_data=validation_ds, callbacks=callbacks)
     test(model, test_ds)

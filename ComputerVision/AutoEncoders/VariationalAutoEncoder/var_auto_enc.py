@@ -59,6 +59,7 @@ def decoder(input_shape=(LATENT_DIM,)):
         1, 3, activation="sigmoid", padding="same")(x)
     return tf.keras.Model(latent_inputs, decoder_outputs, name="decoder")
 
+
 def plot_label_clusters(vae, data, labels):
     z_mean, _, _ = vae.encoder.predict(data)
     plt.figure(figsize=(12, 10))
@@ -67,6 +68,7 @@ def plot_label_clusters(vae, data, labels):
     plt.xlabel("z[0]")
     plt.ylabel("z[1]")
     plt.savefig('label_structure.png')
+
 
 def plot_latent_space(vae, n=30, figsize=15):
     digit_size = 28
@@ -81,8 +83,8 @@ def plot_latent_space(vae, n=30, figsize=15):
             x_decoded = vae.decoder.predict(z_sample)
             digit = x_decoded[0].reshape(digit_size, digit_size)
             figure[
-                i * digit_size : (i + 1) * digit_size,
-                j * digit_size : (j + 1) * digit_size,
+                i * digit_size: (i + 1) * digit_size,
+                j * digit_size: (j + 1) * digit_size,
             ] = digit
 
     plt.figure(figsize=(figsize, figsize))
@@ -154,9 +156,8 @@ if __name__ == "__main__":
     vae.fit(mnist_digits, epochs=30, batch_size=128, callbacks=callbacks)
 
     plot_latent_space(vae)
-    
+
     (x_train, y_train), _ = tf.keras.datasets.mnist.load_data()
     x_train = np.expand_dims(x_train, -1).astype("float32") / 255
 
     plot_label_clusters(vae, x_train, y_train)
-    

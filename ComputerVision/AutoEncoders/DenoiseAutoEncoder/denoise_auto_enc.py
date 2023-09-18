@@ -23,19 +23,19 @@ callbacks = [
 ]
 
 
-def encoder(shape=(None, 784)):
+def encoder(shape=(784,)):
     inputs = tf.keras.layers.Input(shape)
     outputs = tf.keras.layers.Dense(128, activation='relu')(inputs)
     return tf.keras.Model(inputs, outputs)
 
 
-def decoder(shape=(None, 128)):
+def decoder(shape=(128,)):
     inputs = tf.keras.layers.Input(shape)
     outputs = tf.keras.layers.Dense(784, activation='sigmoid')(inputs)
     return tf.keras.Model(inputs, outputs)
 
 
-def autoencoder(shape=(None, 784)):
+def autoencoder(shape=(784,)):
     inputs = tf.keras.layers.Input(shape)
     encoded = encoder()(inputs)
     decoded = decoder()(encoded)
