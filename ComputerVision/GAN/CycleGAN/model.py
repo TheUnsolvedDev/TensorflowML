@@ -1,166 +1,221 @@
 import tensorflow as tf
-
+import tensorflow_addons as tfa
+import silence_tensorflow.auto
 from params import *
+
+kernel_init = tf.keras.initializers.RandomNormal(mean=0.0, stddev=0.02)
+gamma_init = tf.keras.initializers.RandomNormal(mean=0.0, stddev=0.02)
 
 
 class ReflectionPadding2D(tf.keras.layers.Layer):
-    def __init__(self, padding, **kwargs):
+    def __init__(self, padding=(1, 1), **kwargs):
         self.padding = tuple(padding)
-        self.input_spec = [tf.keras.layers.InputSpec(ndim=4)]
-        super(ReflectionPadding2D, self).__init__(**kwargs)
+        super().__init__(**kwargs)
 
-    def compute_output_shape(self, input_shape):
-        shape = (
-            input_shape[0],
-            input_shape[1] + 2 * self.padding[0],
-            input_shape[2] + 2 * self.padding[1],
-            input_shape[3]
-        )
-        return shape
-
-    def call(self, x, mask=None):
-        width_pad, height_pad = self.padding
-        return tf.pad(
-            x,
-            [[0, 0], [height_pad, height_pad], [width_pad, width_pad], [0, 0]],
-            'REFLECT'
-        )
-
-
-class ResnetBlock(tf.keras.layers.Layer):
-    def __init__(self, dim, padding_type, norm_layer, use_dropout, use_bias):
-        super(ResnetBlock, self).__init__()
-        self.norm_layer = norm_layer
-        self.conv_block = self.build_conv_block(
-            dim, padding_type, norm_layer, use_dropout, use_bias)
-
-    def build_conv_block(self, dim, padding_type, norm_layer, use_dropout, use_bias):
-        conv_block = []
-        p = 'valid'
-        if padding_type == 'reflect':
-            conv_block += [ReflectionPadding2D((1, 1))]
-        elif padding_type == 'zero':
-            p = 'same'
-        else:
-            raise NotImplementedError(
-                'padding {} is not implemented'.format(padding_type))
-
-        conv_block += [tf.keras.layers.Conv2D(dim, (3, 3), padding=p, use_bias=use_bias),
-                       norm_layer(), tf.keras.layers.Activation('relu')]
-        if use_dropout:
-            conv_block += [tf.keras.layers.Dropout(0.5)]
-        p = 'valid'
-        if padding_type == 'reflect':
-            conv_block += [ReflectionPadding2D((1, 1))]
-        elif padding_type == 'zero':
-            p = 'same'
-        else:
-            raise NotImplementedError(
-                'padding {} is not implemented'.format(padding_type))
-
-        conv_block += [tf.keras.layers.Conv2D(dim, (3, 3),
-                                              padding=p, use_bias=use_bias), norm_layer()]
-        return tf.keras.Sequential(conv_block)
-
-    def call(self, x, training=True):
-        out = x + self.conv_block(x, training=training)
-        return out
-
-
-class Generator(tf.keras.Model):
-    def __init__(self,
-                 output_dim=3,
-                 ngf=64,
-                 norm_layer=tf.keras.layers.BatchNormalization,
-                 use_dropout=False,
-                 n_blocks=6,
-                 padding_type='reflect'):
-
-        super(Generator, self).__init__()
-        assert (n_blocks >= 0)
-        use_bias = norm_layer == tf.keras.layers.BatchNormalization
-        model = [ReflectionPadding2D((3, 3)),
-                 tf.keras.layers.Conv2D(
-                     ngf, (7, 7), padding='valid', use_bias=use_bias),
-                 norm_layer(),
-                 tf.keras.layers.Activation('relu')]
-        n_downsampling = 2
-        for i in range(n_downsampling):
-            mult = 2 ** i
-            model += [tf.keras.layers.Conv2D(ngf * mult * 2, (3, 3), strides=(2, 2), padding='same', use_bias=use_bias),
-                      norm_layer(),
-                      tf.keras.layers.Activation('relu')]
-        mult = 2 ** n_downsampling
-        for i in range(n_blocks):
-            model += [ResnetBlock(ngf * mult, padding_type=padding_type,
-                                  norm_layer=norm_layer, use_dropout=use_dropout, use_bias=use_bias)]
-        for i in range(n_downsampling):
-            mult = 2 ** (n_downsampling - i)
-            model += [tf.keras.layers.Conv2DTranspose(int(ngf * mult / 2),
-                                                      (3, 3), strides=(2, 2),
-                                                      padding='same', output_padding=1,
-                                                      use_bias=use_bias),
-                      norm_layer(),
-                      tf.keras.layers.Activation('relu')]
-        model += [ReflectionPadding2D((3, 3)),
-                  tf.keras.layers.Conv2D(
-                      output_dim, kernel_size=7, padding='valid'),
-                  tf.keras.layers.Activation('tanh')]
-
-        self.model = tf.keras.Sequential(model)
-
-    def call(self, inputs, training=True):
-        return self.model(inputs, training=training)
-
-    def summary(self):
-        x = tf.keras.layers.Input(shape=(IMAGE_SHAPE))
-        model = tf.keras.Model(inputs=[x], outputs=self.call(x))
-        return model.summary()
-
-
-class Discriminator(tf.keras.layers.Layer):
-    def __init__(self, ndf=64, n_layers=3, norm_layer=tf.keras.layers.BatchNormalization):
-        super(Discriminator, self).__init__()
-
-        use_bias = norm_layer == tf.keras.layers.BatchNormalization
-        kw = 4
-        sequence = [tf.keras.layers.Conv2D(ndf, (kw, kw), strides=(2, 2), padding='same'),
-                    tf.keras.layers.LeakyReLU(0.2)]
-
-        nf_mult = 1
-        for n in range(1, n_layers):
-            nf_mult = min(2 ** n, 8)
-            sequence += [
-                tf.keras.layers.Conv2D(
-                    ndf * nf_mult, (kw, kw), strides=(2, 2), padding='same', use_bias=use_bias),
-                norm_layer(),
-                tf.keras.layers.LeakyReLU(0.2)
-            ]
-
-        nf_mult = min(2 ** n_layers, 8)
-        sequence += [
-            tf.keras.layers.Conv2D(
-                ndf * nf_mult, (kw, kw), strides=(1, 1), padding='same', use_bias=use_bias),
-            norm_layer(),
-            tf.keras.layers.LeakyReLU(0.2)
+    def call(self, input_tensor, mask=None):
+        padding_width, padding_height = self.padding
+        padding_tensor = [
+            [0, 0],
+            [padding_height, padding_height],
+            [padding_width, padding_width],
+            [0, 0],
         ]
+        return tf.pad(input_tensor, padding_tensor, mode="REFLECT")
 
-        sequence += [tf.keras.layers.Conv2D(1,
-                                            (kw, kw), strides=(1, 1), padding='same')]
-        self.model = tf.keras.Sequential(sequence)
 
-    def call(self, inputs, training=True):
-        return self.model(inputs, training=training)
+def residual_block(
+    x,
+    activation,
+    kernel_initializer=kernel_init,
+    kernel_size=(3, 3),
+    strides=(1, 1),
+    padding="valid",
+    gamma_initializer=gamma_init,
+    use_bias=False,
+):
+    dim = x.shape[-1]
+    input_tensor = x
 
-    def summary(self):
-        x = tf.keras.layers.Input(shape=(IMAGE_SHAPE))
-        model = tf.keras.Model(inputs=[x], outputs=self.call(x))
-        return model.summary()
+    x = ReflectionPadding2D()(input_tensor)
+    x = tf.keras.layers.Conv2D(
+        dim,
+        kernel_size,
+        strides=strides,
+        kernel_initializer=kernel_initializer,
+        padding=padding,
+        use_bias=use_bias,
+    )(x)
+    x = tfa.layers.InstanceNormalization(
+        gamma_initializer=gamma_initializer)(x)
+    x = activation(x)
+
+    x = ReflectionPadding2D()(x)
+    x = tf.keras.layers.Conv2D(
+        dim,
+        kernel_size,
+        strides=strides,
+        kernel_initializer=kernel_initializer,
+        padding=padding,
+        use_bias=use_bias,
+    )(x)
+    x = tfa.layers.InstanceNormalization(
+        gamma_initializer=gamma_initializer)(x)
+    x = tf.keras.layers.add([input_tensor, x])
+    return x
+
+
+def downsample(
+    x,
+    filters,
+    activation,
+    kernel_initializer=kernel_init,
+    kernel_size=(3, 3),
+    strides=(2, 2),
+    padding="same",
+    gamma_initializer=gamma_init,
+    use_bias=False,
+):
+    x = tf.keras.layers.Conv2D(
+        filters,
+        kernel_size,
+        strides=strides,
+        kernel_initializer=kernel_initializer,
+        padding=padding,
+        use_bias=use_bias,
+    )(x)
+    x = tfa.layers.InstanceNormalization(
+        gamma_initializer=gamma_initializer)(x)
+    if activation:
+        x = activation(x)
+    return x
+
+
+def upsample(
+    x,
+    filters,
+    activation,
+    kernel_size=(3, 3),
+    strides=(2, 2),
+    padding="same",
+    kernel_initializer=kernel_init,
+    gamma_initializer=gamma_init,
+    use_bias=False,
+):
+    x = tf.keras.layers.Conv2DTranspose(
+        filters,
+        kernel_size,
+        strides=strides,
+        padding=padding,
+        kernel_initializer=kernel_initializer,
+        use_bias=use_bias,
+    )(x)
+    x = tfa.layers.InstanceNormalization(
+        gamma_initializer=gamma_initializer)(x)
+    if activation:
+        x = activation(x)
+    return x
+
+
+def get_resnet_generator(
+    filters=64,
+    num_downsampling_blocks=2,
+    num_residual_blocks=9,
+    num_upsample_blocks=2,
+    gamma_initializer=gamma_init,
+    name=None,
+):
+    img_input = tf.keras.layers.Input(
+        shape=IMAGE_SHAPE, name=name + "_img_input")
+    x = ReflectionPadding2D(padding=(3, 3))(img_input)
+    x = tf.keras.layers.Conv2D(filters, (7, 7), kernel_initializer=kernel_init, use_bias=False)(
+        x
+    )
+    x = tfa.layers.InstanceNormalization(
+        gamma_initializer=gamma_initializer)(x)
+    x = tf.keras.layers.Activation("relu")(x)
+
+    # Downsampling
+    for _ in range(num_downsampling_blocks):
+        filters *= 2
+        x = downsample(x, filters=filters,
+                       activation=tf.keras.layers.Activation("relu"))
+
+    # Residual blocks
+    for _ in range(num_residual_blocks):
+        x = residual_block(x, activation=tf.keras.layers.Activation("relu"))
+
+    # Upsampling
+    for _ in range(num_upsample_blocks):
+        filters //= 2
+        x = upsample(x, filters, activation=tf.keras.layers.Activation("relu"))
+
+    # Final block
+    x = ReflectionPadding2D(padding=(3, 3))(x)
+    x = tf.keras.layers.Conv2D(3, (7, 7), padding="valid")(x)
+    x = tf.keras.layers.Activation("tanh")(x)
+
+    model = tf.keras.models.Model(img_input, x, name=name)
+    return model
+
+
+def get_discriminator(
+    filters=64, kernel_initializer=kernel_init, num_downsampling=3, name=None
+):
+    img_input = tf.keras.layers.Input(
+        shape=IMAGE_SHAPE, name=name + "_img_input")
+    x = tf.keras.layers.Conv2D(
+        filters,
+        (4, 4),
+        strides=(2, 2),
+        padding="same",
+        kernel_initializer=kernel_initializer,
+    )(img_input)
+    x = tf.keras.layers.LeakyReLU(0.2)(x)
+
+    num_filters = filters
+    for num_downsample_block in range(3):
+        num_filters *= 2
+        if num_downsample_block < 2:
+            x = downsample(
+                x,
+                filters=num_filters,
+                activation=tf.keras.layers.LeakyReLU(0.2),
+                kernel_size=(4, 4),
+                strides=(2, 2),
+            )
+        else:
+            x = downsample(
+                x,
+                filters=num_filters,
+                activation=tf.keras.layers.LeakyReLU(0.2),
+                kernel_size=(4, 4),
+                strides=(1, 1),
+            )
+    x = tf.keras.layers.Conv2D(
+        1, (4, 4), strides=(1, 1), padding="same", kernel_initializer=kernel_initializer
+    )(x)
+
+    model = tf.keras.models.Model(inputs=img_input, outputs=x, name=name)
+    return model
 
 
 if __name__ == "__main__":
-    generator = Generator(3)
-    discriminator = Discriminator()
+    # Get the generators
+    gen_G = get_resnet_generator(name="generator_G")
+    gen_F = get_resnet_generator(name="generator_F")
+    gen_G.summary(expand_nested=True)
+    gen_F.summary(expand_nested=True)
+    # Get the discriminators
+    disc_X = get_discriminator(name="discriminator_X")
+    disc_Y = get_discriminator(name="discriminator_Y")
+    disc_X.summary(expand_nested=True)
+    disc_Y.summary(expand_nested=True)
 
-    generator.summary()
-    discriminator.summary()
+    tf.keras.utils.plot_model(
+        gen_G, to_file='GEN_G.png', show_layer_activations=True, show_shapes=True)
+    tf.keras.utils.plot_model(
+        gen_F, to_file='GEN_F.png', show_layer_activations=True, show_shapes=True)
+    tf.keras.utils.plot_model(
+        disc_X, to_file='DISC_X.png', show_layer_activations=True, show_shapes=True)
+    tf.keras.utils.plot_model(
+        disc_Y, to_file='DISC_Y.png', show_layer_activations=True, show_shapes=True)

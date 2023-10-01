@@ -7,19 +7,19 @@ from params import *
 
 silence_tensorflow()
 
-physical_devices = tf.config.experimental.list_physical_devices('GPU')
-tf.config.experimental.set_memory_growth(physical_devices[0], True)
+# physical_devices = tf.config.experimental.list_physical_devices('GPU')
+# tf.config.experimental.set_memory_growth(physical_devices[0], True)
 
 
 def normalize_img(x, dtype):
     x = tf.cast(x, dtype=dtype)
-    return x / 127.5 - 1  # range: -1 ~ 1
+    return x / 255.0 
 
 
 def decode_img(img):
-    img = tf.image.decode_jpeg(img)
+    img = tf.image.decode_jpeg(img,channels = 3)
     img = tf.image.resize(img, (IMAGE_SHAPE[0], IMAGE_SHAPE[1]))
-    img = normalize_img(img, tf.float32)  # range: -1 ~ 1
+    img = normalize_img(img, tf.float32) 
     return img
 
 
@@ -64,11 +64,12 @@ def color(img):
     return img
 
 
-def dataset():
+def dataset(batch_size=BATCH_SIZE,dataset_name = 'vangogh2photo'):
+    os.makedirs('Plots/'+dataset_name,exist_ok=True)
     train_A = tf.data.Dataset.list_files(
-        '/home/shuvrajeet/datasets/vangogh2photo/train/A/*')
+        'Datasets/'+dataset_name+'/trainA/*')
     train_B = tf.data.Dataset.list_files(
-        '/home/shuvrajeet/datasets/vangogh2photo/train/B/*')
+        'Datasets/'+dataset_name+'/trainB/*')
 
     train_A = train_A.map(lambda x: process_path(
         x), num_parallel_calls=tf.data.AUTOTUNE).repeat(1)
@@ -77,19 +78,19 @@ def dataset():
 
     train_dataset = tf.data.Dataset.zip((train_A, train_B)).map(
         lambda x, y: augment_image(x, y), num_parallel_calls=tf.data.AUTOTUNE)
-    train_dataset = train_dataset.cache().batch(BATCH_SIZE).shuffle(BUFFER_SIZE)
-    train_dataset = train_dataset.prefetch(buffer_size=tf.data.AUTOTUNE)
+    train_dataset = train_dataset.batch(batch_size).shuffle(BUFFER_SIZE)
+    train_dataset = train_dataset.prefetch(tf.data.AUTOTUNE)
 
     test_dataset = tf.data.Dataset.zip((train_A, train_B))
-    test_dataset = test_dataset.cache().batch(BATCH_SIZE).shuffle(BUFFER_SIZE)
-    test_dataset = test_dataset.prefetch(buffer_size=tf.data.AUTOTUNE)
+    test_dataset = test_dataset.batch(batch_size).shuffle(BUFFER_SIZE)
+    test_dataset = test_dataset.prefetch(tf.data.AUTOTUNE)
 
     return train_dataset, test_dataset
 
 
 if __name__ == '__main__':
-    data,dats2 = dataset()
-    for dat in data:
+    data, dats2 = dataset()
+    for dat in data.take(1):
         print(dat[0].numpy().shape)
         print(dat[1].numpy().shape)
-        break
+        

@@ -1,24 +1,56 @@
+import argparse
 import tensorflow as tf
 import numpy as np
 import matplotlib.pyplot as plt
-import cv2
 import sys
-from silence_tensorflow import silence_tensorflow
+import silence_tensorflow.auto
 
 from params import *
 from model import *
 from dataset import *
 
-silence_tensorflow()
-
-import argparse
 
 parser = argparse.ArgumentParser(description='Select GPU[0-3]:')
-parser.add_argument('--gpu', type=int, default=0,
+parser.add_argument('--gpu', type=int, default=-1,
                     help='GPU number')
+parser.add_argument('--name', type=str, default='vangogh2photo',
+                    help='Name of the Dataset to select')
 args = parser.parse_args()
 physical_devices = tf.config.experimental.list_physical_devices('GPU')
-tf.config.experimental.set_visible_devices(physical_devices[args.gpu], 'GPU')
+if args.gpu >= 0 and args.gpu <= 3:
+    tf.config.experimental.set_visible_devices(
+        physical_devices[args.gpu], 'GPU')
+else:
+    for device in physical_devices:
+        tf.config.experimental.set_memory_growth(device, enable=True)
+
+callbacks = [
+    tf.keras.callbacks.EarlyStopping(monitor='Train_loss', patience=25),
+    tf.keras.callbacks.ModelCheckpoint(
+        filepath='cycle_gan'+args.name+'.h5', save_weights_only=True, monitor='val_loss', save_best_only=True),
+    tf.keras.callbacks.TensorBoard(
+        log_dir='./logs', histogram_freq=1, write_graph=True),
+    tf.keras.callbacks.LearningRateScheduler(
+        schedule=lambda epoch: 0.005 * (0.995 ** (epoch//10)))
+]
+
+
+def update_images(test_data):
+    class Updates(tf.keras.callbacks.Callback):
+        def on_epoch_end(self, epoch, logs=None):
+            if epoch % 25 == 0:
+                for data in test_data.take(1):
+                    pred_G, pred_F = cycle_gan_model(data)
+                    real_imgs1 = np.hstack(data[0][:4]*255).astype(np.uint8)
+                    pred_imgs_G = np.hstack(pred_G[:4]*255).astype(np.uint8)
+                    real_imgs2 = np.hstack(data[1][:4]*255).astype(np.uint8)
+                    pred_imgs_F = np.hstack(pred_F[:4]*255).astype(np.uint8)
+                    pred = np.vstack(
+                        [real_imgs1, pred_imgs_G, real_imgs2, pred_imgs_F])
+                    plt.imshow(pred)
+                    plt.savefig('Plots/'+args.name+'/Updates{}.png'.format(epoch))
+            return super().on_epoch_end(epoch, logs)
+    return Updates()
 
 
 def save_imgs(epoch, generator, real_x):
@@ -41,181 +73,134 @@ def save_imgs(epoch, generator, real_x):
     fig.savefig("trial_images/result_{}.png".format(str(epoch).zfill(5)))
 
 
-def discriminator_loss(loss_object, real_output, fake_output):
-    real_loss = loss_object(tf.ones_like(real_output), real_output)
-    fake_loss = loss_object(tf.zeros_like(fake_output), fake_output)
-    total_loss = (real_loss + fake_loss) * 0.5
-    return total_loss
+def generator_loss_fn(fake):
+    fake_loss = tf.keras.losses.binary_crossentropy(tf.ones_like(fake), fake)
+    return tf.reduce_mean(fake_loss)
 
 
-def generator_loss(loss_object, fake_output):
-    return loss_object(tf.ones_like(fake_output), fake_output)
+def discriminator_loss_fn(real, fake):
+    real_loss = tf.keras.losses.binary_crossentropy(tf.ones_like(real), real)
+    fake_loss = tf.keras.losses.binary_crossentropy(tf.zeros_like(fake), fake)
+    return tf.reduce_mean((real_loss + fake_loss) * 0.5)
 
 
-def cycle_loss(loss_object, real_image, cycled_image, _lambda=10):
-    return loss_object(real_image, cycled_image) * _lambda
+class CycleGan(tf.keras.Model):
+    def __init__(self):
+        super(CycleGan, self).__init__()
+        self.gen_G = get_resnet_generator(name="generator_G")
+        self.gen_F = get_resnet_generator(name="generator_F")
+        self.disc_X = get_discriminator(name="discriminator_X")
+        self.disc_Y = get_discriminator(name="discriminator_Y")
+        self.lambda_cycle = 10.0
+        self.lambda_identity = 0.5
 
+        self.gen_G_optimizer = tf.keras.optimizers.legacy.Adam(
+            learning_rate=2e-4, beta_1=0.5)
+        self.gen_F_optimizer = tf.keras.optimizers.legacy.Adam(
+            learning_rate=2e-4, beta_1=0.5)
+        self.disc_X_optimizer = tf.keras.optimizers.legacy.Adam(
+            learning_rate=2e-4, beta_1=0.5)
+        self.disc_Y_optimizer = tf.keras.optimizers.legacy.Adam(
+            learning_rate=2e-4, beta_1=0.5)
+        self.generator_loss_fn = generator_loss_fn
+        self.discriminator_loss_fn = discriminator_loss_fn
 
-def identity_loss(loss_object, real_image, same_image, _lambda=10):
-    return loss_object(real_image, same_image) * 0.5 * _lambda
+    def call(self, inputs):
+        real_x, real_y = inputs
+        return self.gen_G(real_x), self.gen_F(real_y)
 
+    # @tf.function
+    def train_step(self, inputs):
+        real_x, real_y = inputs
+        with tf.GradientTape(persistent=True) as tape:
+            fake_y = self.gen_G(real_x, training=True)
+            fake_x = self.gen_F(real_y, training=True)
 
-@tf.function
-def train_step(gene_G, gene_F, disc_X, disc_Y, real_x, real_y):
-    with tf.GradientTape(persistent=True) as tape:
-        fake_y = gene_G(real_x)
-        rec_x = gene_F(fake_y)
+            cycled_x = self.gen_F(fake_y, training=True)
+            cycled_y = self.gen_G(fake_x, training=True)
 
-        fake_x = gene_F(real_y)
-        rec_y = gene_G(fake_x)
+            same_x = self.gen_F(real_x, training=True)
+            same_y = self.gen_G(real_y, training=True)
 
-        same_x = gene_G(real_x)
-        same_y = gene_F(real_y)
+            disc_real_x = self.disc_X(real_x, training=True)
+            disc_fake_x = self.disc_X(fake_x, training=True)
 
-        disc_real_x = disc_X(real_x)
-        disc_real_y = disc_Y(real_y)
+            disc_real_y = self.disc_Y(real_y, training=True)
+            disc_fake_y = self.disc_Y(fake_y, training=True)
 
-        disc_fake_x = disc_X(fake_x)
-        disc_fake_y = disc_Y(fake_y)
+            gen_G_loss = self.generator_loss_fn(disc_fake_y)
+            gen_F_loss = self.generator_loss_fn(disc_fake_x)
 
-        # Loss Func.
-        disc_x_loss = discriminator_loss(
-            cross_entropy, disc_real_x, disc_fake_x)
-        disc_y_loss = discriminator_loss(
-            cross_entropy, disc_real_y, disc_fake_y)
+            cycle_loss_G = tf.reduce_mean(tf.keras.losses.mean_absolute_error(
+                real_y, cycled_y) * self.lambda_cycle)
+            cycle_loss_F = tf.reduce_mean(tf.keras.losses.mean_absolute_error(
+                real_x, cycled_x) * self.lambda_cycle)
 
-        gene_g_loss = generator_loss(cross_entropy, disc_fake_y)
-        gene_f_loss = generator_loss(cross_entropy, disc_fake_x)
+            id_loss_G = tf.reduce_mean(
+                tf.keras.losses.mean_absolute_error(real_y, same_y)
+                * self.lambda_cycle
+                * self.lambda_identity
+            )
+            id_loss_F = tf.reduce_mean(
+                tf.keras.losses.mean_absolute_error(real_x, same_x)
+                * self.lambda_cycle
+                * self.lambda_identity
+            )
 
-        cycle_x_loss = cycle_loss(mae, real_x, rec_x)
-        cycle_y_loss = cycle_loss(mae, real_y, rec_y,)
+            total_loss_G = gen_G_loss + cycle_loss_G + id_loss_G
+            total_loss_F = gen_F_loss + cycle_loss_F + id_loss_F
+            disc_X_loss = self.discriminator_loss_fn(disc_real_x, disc_fake_x)
+            disc_Y_loss = self.discriminator_loss_fn(disc_real_y, disc_fake_y)
 
-        total_cycle_loss = cycle_x_loss + cycle_y_loss
-        total_gene_g_loss = gene_g_loss + total_cycle_loss + \
-            identity_loss(mae, real_y, same_y)
-        total_gene_f_loss = gene_f_loss + total_cycle_loss + \
-            identity_loss(mae, real_x, same_x)
+        grads_G = tape.gradient(total_loss_G, self.gen_G.trainable_variables)
+        grads_F = tape.gradient(total_loss_F, self.gen_F.trainable_variables)
+        disc_X_grads = tape.gradient(
+            disc_X_loss, self.disc_X.trainable_variables)
+        disc_Y_grads = tape.gradient(
+            disc_Y_loss, self.disc_Y.trainable_variables)
 
-    grad_gene_G = tape.gradient(total_gene_g_loss, gene_G.trainable_variables)
-    grad_gene_F = tape.gradient(total_gene_f_loss, gene_F.trainable_variables)
-
-    grad_disc_X = tape.gradient(disc_x_loss, disc_X.trainable_variables)
-    grad_disc_Y = tape.gradient(disc_y_loss, disc_Y.trainable_variables)
-
-    gene_g_optimizer.apply_gradients(
-        zip(grad_gene_G, gene_G.trainable_variables))
-    gene_f_optimizer.apply_gradients(
-        zip(grad_gene_F, gene_F.trainable_variables))
-
-    disc_x_optimizer.apply_gradients(
-        zip(grad_disc_X, disc_X.trainable_variables))
-    disc_y_optimizer.apply_gradients(
-        zip(grad_disc_Y, disc_Y.trainable_variables))
-
-    return total_gene_g_loss, total_gene_f_loss, disc_x_loss, disc_y_loss
-
-
-def train_model(train, epochs=ITERATION, batch_size=BATCH_SIZE):
-    gene_G = Generator()
-    gene_F = Generator()
-    disc_X = Discriminator()
-    disc_Y = Discriminator()
-
-    gene_G.build([None, *IMAGE_SHAPE])
-    gene_F.build([None, *IMAGE_SHAPE])
-    gene_F.summary()
-    gene_G.summary()
-
-    disc_X.build([None, *IMAGE_SHAPE])
-    disc_Y.build([None, *IMAGE_SHAPE])
-    disc_X.summary()
-    disc_Y.summary()
-
-    try:
-        gene_G.load_weights('trial_weights/gene_G.h5')
-        gene_F.load_weights('trial_weights/gene_F.h5')
-    except FileNotFoundError:
-        os.mkdir('trial_weights')
-        os.mkdir('trial_images')
-
-    print('Training...')
-    for epoch in range(0, epochs+1):
-        total_gene_g_loss = 0
-        total_gene_f_loss = 0
-        total_disc_x_loss = 0
-        total_disc_y_loss = 0
-
-        for ind, images in enumerate(train):
-            real_x, real_y = images
-            gene_g_loss, gene_f_loss, disc_x_loss, disc_y_loss = train_step(
-                gene_G, gene_F, disc_X, disc_Y, real_x, real_y)
-            total_gene_g_loss += gene_g_loss
-            total_gene_f_loss += gene_f_loss
-            total_disc_x_loss += disc_x_loss
-            total_disc_y_loss += disc_y_loss
-
-        template = '\r[{}/{}] G gene_loss = {}, F gene_loss = {}, D x_loss = {}, D y_loss = {}'
-        print(template.format(epoch, ITERATION, total_gene_g_loss / batch_size,
-                              total_gene_f_loss / batch_size,
-                              total_disc_x_loss / batch_size,
-                              total_disc_y_loss / batch_size), end=' ')
-        sys.stdout.flush()
-
-        if epoch % EVERY_STEP == 0:
-            save_imgs(epoch + 1, gene_F, real_y)
-            gene_G.save_weights('trial_weights/gene_G.h5')
-            gene_F.save_weights('trial_weights/gene_F.h5')
-
-
-def test_model(data):
-    gene_F = Generator()
-    gene_F.build([None, *IMAGE_SHAPE])
-    gene_F.summary()
-    gene_F.load_weights('trial_weights/gene_F.h5')
-
-    for image in data:
-        real_x, real_y = image
-        break
-
-    her_image = cv2.imread('/home/shuvrajeet/Downloads/try.jpg')
-    her_image = cv2.resize(cv2.cvtColor(
-        her_image, cv2.COLOR_BGR2RGB), (IMAGE_SHAPE[0], IMAGE_SHAPE[1]))
-    her_image = normalize_img(her_image, dtype=tf.float32)
-
-    her_image = tf.expand_dims(her_image, axis=0)
-    her_gen_image = gene_F(her_image, training=False)
-
-    gene_imgs = gene_F(real_y, training=False)
-    gene_imgs = ((gene_imgs.numpy() + 1) * 127.5).astype(np.uint8)
-    real_y = ((real_y.numpy() + 1) * 127.5).astype(np.uint8)
-
-    her_image = ((her_image.numpy() + 1) * 127.5).astype(np.uint8)
-    her_gen_image = ((her_gen_image.numpy() + 1) * 127.5).astype(np.uint8)
-
-    for i in range(0, len(her_gen_image)):
-        image = np.hstack([her_image[i], her_gen_image[i]])
-        plt.imshow(image)
-        plt.axis('off')
-        plt.savefig("trial_images/final_result_{}.png".format(str(i).zfill(5)))
-        plt.show()
-
-    for i in range(0, len(real_y)):
-        image = np.hstack([real_y[i], gene_imgs[i]])
-        plt.imshow(image)
-        plt.axis('off')
-        plt.savefig("trial_images/final_result_{}.png".format(str(i).zfill(5)))
-        plt.show()
+        self.gen_G_optimizer.apply_gradients(
+            zip(grads_G, self.gen_G.trainable_variables)
+        )
+        self.gen_F_optimizer.apply_gradients(
+            zip(grads_F, self.gen_F.trainable_variables)
+        )
+        self.disc_X_optimizer.apply_gradients(
+            zip(disc_X_grads, self.disc_X.trainable_variables)
+        )
+        self.disc_Y_optimizer.apply_gradients(
+            zip(disc_Y_grads, self.disc_Y.trainable_variables)
+        )
+        return {
+            "G_loss": total_loss_G,
+            "F_loss": total_loss_F,
+            "D_X_loss": disc_X_loss,
+            "D_Y_loss": disc_Y_loss,
+        }
 
 
 if __name__ == '__main__':
-    gene_g_optimizer = tf.keras.optimizers.Adam(0.0002, 0.5)
-    gene_f_optimizer = tf.keras.optimizers.Adam(0.0002, 0.5)
-    disc_x_optimizer = tf.keras.optimizers.Adam(0.0002, 0.5)
-    disc_y_optimizer = tf.keras.optimizers.Adam(0.0002, 0.5)
+    data, test_data = dataset(BATCH_SIZE,dataset_name = args.name)
+    # Get the generators
+    strategy = tf.distribute.MirroredStrategy()
+    with strategy.scope() as scope:
+        cycle_gan_model = CycleGan()
+        cycle_gan_model.compile(loss=None)
 
-    cross_entropy = tf.keras.losses.BinaryCrossentropy(from_logits=True)
-    mae = tf.keras.losses.MeanAbsoluteError()
-    data, test_data = dataset()
+        cycle_gan_model.fit(
+            data, epochs=int(1e+5), callbacks=callbacks+[update_images(test_data)])
 
-    # train_model(data)
-    test_model(test_data)
+    # cycle_gan_model = CycleGan()
+    # for data in test_data.take(1):
+    #     pred_G, pred_F = cycle_gan_model(data)
+    #     real_imgs1 = np.hstack(data[0][:4]*255).astype(np.uint8)
+    #     pred_imgs_G = np.hstack(pred_G[:4]*255).astype(np.uint8)
+    #     real_imgs2 = np.hstack(data[1][:4]*255).astype(np.uint8)
+    #     pred_imgs_F = np.hstack(pred_G[:4]*255).astype(np.uint8)
+    #     pred = np.vstack([real_imgs1, pred_imgs_G, real_imgs2, pred_imgs_F])
+    #     print(pred.shape)
+
+    # # imgs = np.hstack([a[0]*255,b[0]*255]).astype(np.uint8)
+    # plt.imshow(pred)
+    # plt.savefig('plot.png')
+    # test_model(test_data)
