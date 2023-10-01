@@ -1,5 +1,5 @@
 # Machine-Learning-with-Tensorflow-2
-A repository comprising the algorithms of Machine Learning implemented on tensorflow 2 with keras and many other special machine learning libraries.
+A repository comprising the algorithms of Machine Learning implemented on tensorflow 2 with keras and many other special machine learning libraries. If you find this useful please share and give your valuable insights.
 
 ```
 Machine Learning Algorithms
