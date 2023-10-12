@@ -6,4 +6,4 @@ pip3 install tensorflow_datasets
 pip3 install tqdm
 pip3 install numpy 
 pip3 install matplotlib 
-pip3 install tensorflow_probabiliity
+pip3 install tensorflow_probability

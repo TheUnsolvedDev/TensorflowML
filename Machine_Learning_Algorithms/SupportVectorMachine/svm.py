@@ -1,6 +1,5 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import sklearn
 import tensorflow as tf
 from mpl_toolkits.mplot3d import Axes3D
 from matplotlib import style
@@ -81,7 +80,6 @@ class svm_model:
         return model
 
     def train(self):
-
         self.svc_clf = self.svc()
         self.svc_clf.fit(self.train_data, self.train_label, epochs=self.epochs)
         self.w = self.svc_clf.get_weights()[0]
