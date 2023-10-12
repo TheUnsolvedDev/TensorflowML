@@ -103,7 +103,7 @@ Before trying, follow these steps:
    ```
 
 # Contributions
-Contributions are welcome! If you have implemented a new GAN variant or have improvements to existing implementations, feel free to submit a pull request. Please follow the contribution guidelines outlined in the repository.
+Contributions are welcome! If you have implemented a new insights or have improvements to existing implementations, feel free to submit a pull request. Please follow the contribution guidelines outlined in the repository.
 
 # License
 This project is licensed under the GNU General Public License v3.0 - see the LICENSE file for details.
