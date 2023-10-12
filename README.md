@@ -2,24 +2,15 @@
 A repository comprising the algorithms of Machine Learning implemented on tensorflow 2 with keras and many other special machine learning libraries. If you find this useful please share and give your valuable insights.
 
 ```
-Machine Learning Algorithms
-├── Applications
-│   ├── AdversarialAttacks
-│   ├── Age detection
-│   ├── CityscapesSegmentation
-│   ├── DeepDream
-│   ├── ElasticWeightConsolidation
-│   ├── FinalYearProject
-│   ├── Image_Captioning_with_tf2
-│   ├── MP-IDB: The Malaria Parasite Image Database for Image Processing and Analysis
-│   ├── MultimodelPrep
-│   └── pipeline_design
-├── ArtificialNeuralNetwork
-│   ├── DeepNeuralNetwork
-│   └── SiameseNetwork
 ├── ComputerVision
-│   ├── AutoML
-│   │   └── NASNet
+│   ├── AutoEncoders
+│   │   ├── ContractiveAutoencoder
+│   │   ├── ConvolutionalAutoEncoder
+│   │   ├── DenoiseAutoEncoder
+│   │   ├── SparseAutoEncoder
+│   │   ├── StackedAutoEncoder
+│   │   ├── VanillaAutoencoder
+│   │   └── VariationalAutoEncoder
 │   ├── GAN
 │   │   ├── ConditionalGan
 │   │   ├── CycleGAN
@@ -39,19 +30,17 @@ Machine Learning Algorithms
 │   │   │   ├── HighwayNet
 │   │   │   ├── InceptionNet
 │   │   │   │   ├── InceptionV1
-│   │   │   │   ├── InceptionV2
-│   │   │   │   ├── InceptionV3
-│   │   │   │   └── InceptionV4
+│   │   │   │   └── InceptionV2
 │   │   │   ├── NetworkInNetwork
 │   │   │   ├── ResidualAttentionNet
 │   │   │   ├── ResNet
-│   │   │   │   ├── base_resnet
-│   │   │   │   └── resnet18_CBAM
 │   │   │   ├── ResNext
 │   │   │   ├── SENet
 │   │   │   ├── VGGNet
 │   │   │   └── VisionTransformer
 │   │   ├── Robustness
+│   │   │   ├── AdversarialSaliencyMaps
+│   │   │   ├── BlackBoxAttacks
 │   │   │   ├── FastGradientSignMethod
 │   │   │   └── IterativeLeastLikelyMethod
 │   │   └── SmallNetwork
@@ -67,44 +56,23 @@ Machine Learning Algorithms
 │   │       ├── XceptionNet
 │   │       ├── XNOR-Net
 │   │       └── ZFNet
-│   ├── Misc
-│   │   ├── GeneticCNN
-│   │   ├── MetaQNN
-│   │   └── StyleTransfer
-│   ├── ObjectDetection
-│   │   ├── FasterRCNN
-│   │   ├── SingleShotDetection
-│   │   └── YOLO
-│   │       └── v2
-│   └── SemanticSegmentation
-│       ├── DeepLabV3Plus
-│       ├── Gated_SCNN
-│       ├── JointPyramidalUnit
-│       ├── PyramidalNet
-│       ├── ResUNet
-│       └── UNet
-├── GraphNeuralNetwork
+│   └── Misc
+│       ├── GeneticCNN
+│       └── StyleTransfer
 ├── Machine_Learning_Algorithms
+│   ├── KNearestNeighbour
 │   ├── LinearRegression
 │   ├── LogisticRegression
 │   ├── NaiveBayesClassifier
-│   └── SVM
-├── Miscellaneous
-│   ├── EmpiricalRiskMinimization
-│   ├── GaussianCDF
-│   ├── GradientAccumulation
-│   ├── Initialization_and_gradient_test
-│   └── Regularization_with_NM_optimization
-├── NLP
-│   ├── TextClassification
-│   │   └── SentenceClassificationCNN
-│   └── WordRepresentations
-└── RecurrentNeuralNetwork
-    ├── Bidirectional_RNN
-    ├── Doc2Vec
-    ├── FourierNet
-    ├── GatedRecurrentUnit
-    └── SimpleRNN
+│   └── SupportVectorMachine
+└── Miscellaneous
+    ├── EmpiricalRiskMinimization
+    ├── GaussianCDF
+    ├── GradientAccumulation
+    ├── Initialization_and_gradient_test
+    └── Regularization_with_NM_optimization
+
+
 
 ```
 
@@ -116,7 +84,7 @@ Before trying, follow these steps:
  
   ###  Installation process :
   ```bash
-  pip3 install tensorflow #if you've an nvidia-gpu with cuda support
+  pip3 install tensorflow[and-cuda] #if you've an nvidia-gpu with cuda support
   pip3 install pandas
   pip3 install numpy
   pip3 install matplotlib
@@ -125,10 +93,20 @@ Before trying, follow these steps:
   ```
   
   ## Fire up your terminal/cmd
+  ```bash
+  sh setup.sh
+  ```
    
    # 🤖 Linux or Windows:
    ```bash
    python3 <file_name>.py
    ```
 
+# Contributions
+Contributions are welcome! If you have implemented a new GAN variant or have improvements to existing implementations, feel free to submit a pull request. Please follow the contribution guidelines outlined in the repository.
+
+# License
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+Happy generating! 
   

@@ -5,119 +5,94 @@ import pandas as pd
 import tqdm
 import random
 from silence_tensorflow import silence_tensorflow
+import argparse
 
 from params import *
 
 silence_tensorflow()
-physical_devices = tf.config.experimental.list_physical_devices('GPU')
-tf.config.experimental.set_memory_growth(physical_devices[0], True)
 
 
-class TensorLookup:
-    def __init__(self, keys, strings):
-        self.keys = keys
-        self.strings = strings
-        self.table = tf.lookup.StaticHashTable(
-            tf.lookup.KeyValueTensorInitializer(
-                self.keys, tf.range(tf.shape(self.keys)[0])),
-            default_value=-1)
-
-    def lookup(self, key):
-        index = self.table.lookup(key)
-        return self.strings[index]
+def process_data(path, true_label, random_label):
+    img = tf.io.read_file(path)
+    img = tf.image.decode_png(img, channels=3)
+    img = tf.image.resize(img, (IMAGE_SHAPE[0], IMAGE_SHAPE[1]))
+    return img/255.0, true_label, random_label
 
 
-class tensorflow_pipeline:
-    def __init__(self, batch_size=128):
+class Datagen(tf.keras.utils.Sequence):
+    def __init__(self, batch_size=BATCH_SIZE) -> None:
+        self.batch_size = batch_size
+
         data = pd.read_csv(
-            '/home/shuvrajeet/datasets/celeba/list_attr_celeba.csv')
+            'Datasets/list_attr_celeba.csv')
         ATTRIBUTES = ['Black_Hair', 'Blond_Hair',
                       'Brown_Hair', 'Male', 'Young']
         for attr in data.columns[1:]:
             if attr not in ATTRIBUTES:
                 data = data.drop([attr], axis=1)
-        data = data.replace(-1, 0)
-        data = (np.array(data))
-        self.batch_size = batch_size
-        keys = tf.convert_to_tensor(data[:, 0], dtype=tf.string)
-        values = tf.convert_to_tensor(data[:, 1:], dtype=tf.int32)
-        # self.table = tf.lookup.StaticHashTable(
-        #     tf.lookup.KeyValueTensorInitializer(keys, values),
-        #     default_value=-1)
-        self.table = TensorLookup(keys, values)
-        self.base_path = './'
-        self.files = tf.data.Dataset.list_files(
-            self.base_path+'*')
+        self.data = np.array(data.replace(-1, 0))
+        self.image_paths = self.data[:, 0]
+        self.labels = self.data[:, 1:]
 
-    def normalize(self, image):
-        image = tf.cast(image, dtype=tf.float32)
-        image = (image / 127.5) - 1
-        return image
+    def __len__(self):
+        return len(self.data)//self.batch_size
 
-    def resize(self, image, size):
-        h, w = size
-        image = tf.image.resize(image, [h, w])
-        return image
+    def read_data(self, path):
+        img = tf.io.read_file(path)
+        img = tf.image.decode_jpeg(img, channels=3)
+        img = tf.image.resize(img, (IMAGE_SHAPE[0], IMAGE_SHAPE[1]))
+        img = (img/255.0, tf.float32)
+        return img[0].numpy()
 
-    def process_path(self, file_path):
-        img = tf.io.read_file(file_path)
-        img = tf.image.decode_jpeg(img)
-        return img
+    def __getitem__(self, index):
+        low = index * self.batch_size
+        high = min(low + self.batch_size, len(self.data))
+        idx = np.random.permutation(self.batch_size)
+        batch_x = self.image_paths[low:high]
+        batch_y = self.labels[low:high]
+        batch_z = batch_y.copy()
+        np.random.shuffle(batch_z)
 
-    def preprocess_data(self, file_path):
-        image = self.process_path(file_path)
-        image = self.resize(image, (128, 128))
-        image = self.normalize(image)
-        return image
+        imgs, lbl, gen_lbl = [], [], []
+        for i in idx:
+            imgs.append(self.read_data(
+                'Datasets/img_align_celeba/'+batch_x[i]))
+            lbl.append(batch_y[i])
+            gen_lbl.append(batch_z[i])
 
-    def get_label(self, path):
-        path = tf.strings.split(path, sep='/')[-1]
-        return self.table.lookup(path)
-
-    def parse_func(self, files):
-        img = []
-        label = []
-        new_targets = []
-        for i in range(len(files)):
-            label.append(self.get_label(files[i]))
-            new_targets.append(self.get_label(files[i]))
-            img.append(self.preprocess_data(files[i]))
-        random.shuffle(new_targets)
-        return img, label, new_targets
-
-    def train_gen(self):
-        for img, label, new_target in self.train_img:
-            yield img, label, new_target
-
-    def load_images_gen(self):
-        train_files = self.files
-        train_ds_batch = train_files.batch(
-            self.batch_size, drop_remainder=True)
-        self.train_img = train_ds_batch.map(
-            lambda x: self.parse_func(x))
-
-        train_gen = tf.data.Dataset.from_generator(
-            generator=self.train_gen,
-            output_signature=(
-                tf.TensorSpec(shape=(None, 128, 128, 3), dtype=tf.float32),
-                tf.TensorSpec(shape=(None, 5), dtype=tf.int32),
-                tf.TensorSpec(shape=(None, 5), dtype=tf.int32))).prefetch(tf.data.AUTOTUNE)
-        return train_gen
+        return np.array(imgs).astype(np.float32), np.array(lbl).astype(np.float32), np.array(gen_lbl).astype(np.float32)
 
 
-def create_dataset():
-    pipe = tensorflow_pipeline()
-    gen = pipe.load_images_gen()
-    return gen
+def dataset():
+    data = pd.read_csv(
+        'Datasets/list_attr_celeba.csv')
+    ATTRIBUTES = ['Black_Hair', 'Blond_Hair',
+                  'Brown_Hair', 'Male', 'Young']
+    for attr in data.columns[1:]:
+        if attr not in ATTRIBUTES:
+            data = data.drop([attr], axis=1)
+    data = np.array(data.replace(-1, 0))
+    image_paths = 'Datasets/img_align_celeba/'+data[:, 0]
+    labels = data[:, 1:].astype(np.float32)
+
+    imgs = tf.data.Dataset.from_tensor_slices(image_paths)
+    true_labels = tf.data.Dataset.from_tensor_slices(labels.copy())
+    np.random.shuffle(labels)
+    gen_label = tf.data.Dataset.from_tensor_slices(labels.copy())
+
+    dataset = tf.data.Dataset.zip((imgs, true_labels, gen_label))
+    dataset = dataset.map(
+        lambda x, y, z: process_data(x, y, z)).batch(BATCH_SIZE)
+    return dataset.prefetch(tf.data.AUTOTUNE)
 
 
 if __name__ == '__main__':
-    # data = create_dataset()
-    # for ind in tqdm.tqdm(range(len(data))):
-    #     a, b, c = data.__getitem__(ind)
-    #     print(ind,a.shape, b, c)
-    #     break
-    pipe = tensorflow_pipeline()
-    gen = pipe.load_images_gen()
-    for x, y, z in gen.take(100):
-        print(x.shape, y.shape, z.shape)
+    data = dataset()
+    for i in data.take(1):
+        print(i[0].shape, np.min(i[0]), np.max(i[0]))
+        break
+
+# if __name__ == '__main__':
+#     pipe = Datagen()
+#     a, b, d = pipe.__getitem__(0)
+#     print(a)

@@ -66,15 +66,12 @@ class Generator(tf.keras.Model):
         x = self.concat([inputs, domains])
         return self.model(x, training=training)
 
-    def summary(self):
-        x1 = tf.keras.layers.Input(shape=(IMAGE_SHAPE))
-        x2 = tf.keras.layers.Input(shape=(5,))
-        self.ker_model = tf.keras.Model(
-            inputs=[x1, x2], outputs=self.call([x1, x2]))
-        return self.ker_model.summary(expand_nested=True)
-
     def show_model(self):
-        return self.ker_model
+        x1 = tf.keras.layers.Input(shape=IMAGE_SHAPE)
+        x2 = tf.keras.layers.Input(shape=(5,))
+        model = tf.keras.Model(
+            inputs=[x1, x2], outputs=self.call([x1, x2]))
+        return model
 
 
 class Discriminator(tf.keras.Model):
@@ -106,17 +103,14 @@ class Discriminator(tf.keras.Model):
         x = self.model(inputs, training=training)
         return self.src(x), tf.squeeze(self.cls(x))
 
-    def summary(self):
-        x = tf.keras.layers.Input(shape=(IMAGE_SHAPE))
-        self.ker_model = tf.keras.Model(inputs=[x], outputs=self.call(x))
-        return self.ker_model.summary(expand_nested=True)
-
     def show_model(self):
-        return self.ker_model
+        x = tf.keras.layers.Input(shape=IMAGE_SHAPE)
+        model = tf.keras.Model(inputs=[x], outputs=self.call(x))
+        return model
 
 
 if __name__ == '__main__':
-    generator = Generator()
-    generator.summary()
-    discriminator = Discriminator(IMAGE_SHAPE, NUM_CLASS)
-    discriminator.summary()
+    generator = Generator().show_model()
+    generator.summary(expand_nested=True)
+    discriminator = Discriminator(IMAGE_SHAPE, NUM_CLASS).show_model()
+    discriminator.summary(expand_nested=True)
