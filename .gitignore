@@ -2,6 +2,10 @@
 *.ii
 *.gpu
 *.ptx
+.vscode
+*.png
+*.pdf
+*.h5
 __pycache__/
 logs/
 Datasets/

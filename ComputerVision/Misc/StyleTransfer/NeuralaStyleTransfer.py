@@ -25,7 +25,7 @@ def deprocess_image(x):
     x[:, :, 0] += 103.939
     x[:, :, 1] += 116.779
     x[:, :, 2] += 123.68
-    # 'BGR'->'RGB'
+    
     x = x[:, :, ::-1]
     x = np.clip(x, 0, 255).astype("uint8")
     return x
@@ -79,7 +79,7 @@ def compute_loss(combination_image, base_image, style_reference_image):
         sl = style_loss(style_reference_features, combination_features)
         loss += (style_weight / len(style_layer_names)) * sl
 
-    # Add total variation loss
+    
     loss += total_variation_weight * total_variation_loss(combination_image)
     return loss
 
@@ -94,7 +94,7 @@ def compute_loss_and_grads(combination_image, base_image, style_reference_image)
 
 
 if __name__ == '__main__':
-    base_image_path = 'Her.jpeg'
+    base_image_path = 'Her.jpg'
     style_reference_image_path = tf.keras.utils.get_file(
         "starry_night.jpg", "https://i.imgur.com/9ooB60I.jpg"
     )
@@ -102,9 +102,9 @@ if __name__ == '__main__':
 
     total_variation_weight = 1e-6
     style_weight = 1e-6
-    content_weight = 2.5e-8
+    content_weight = 2.5e-9
 
-    # Dimensions of the generated picture.
+    
     width, height = tf.keras.preprocessing.image.load_img(
         base_image_path).size
     img_nrows = 640
@@ -121,7 +121,7 @@ if __name__ == '__main__':
         "block4_conv1",
         "block5_conv1",
     ]
-    # The layer to use for the content loss.
+    
     content_layer_name = "block5_conv2"
 
     optimizer = tf.keras.optimizers.SGD(
