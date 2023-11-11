@@ -76,6 +76,29 @@ def make_discriminator():
     return tf.keras.models.Model(inputs, outputs)
 
 
+# def make_generator():
+#     inputs = tf.keras.layers.Input(shape=(Z_DIM,))
+
+#     x = tf.keras.layers.Dense(256*7*7)(inputs)
+#     x = tf.keras.layers.BatchNormalization()(x)
+#     x = tf.keras.layers.LeakyReLU(0.2)(x)
+
+#     x = tf.keras.layers.Reshape((7, 7, 256))(x)
+
+#     x = tf.keras.layers.Conv2DTranspose(
+#         128, (5, 5), padding='same', use_bias=False)(x)
+#     x = tf.keras.layers.BatchNormalization()(x)
+#     x = tf.keras.layers.LeakyReLU(0.2)(x)
+
+#     x = tf.keras.layers.Conv2DTranspose(
+#         64, (5, 5), strides=(2, 2), padding='same', use_bias=False)(x)
+#     x = tf.keras.layers.BatchNormalization()(x)
+#     x = tf.keras.layers.LeakyReLU(0.2)(x)
+
+#     outputs = tf.keras.layers.Conv2DTranspose(1, (5, 5), strides=(
+#         2, 2), padding='same', use_bias=False, activation='sigmoid')(x)
+#     return tf.keras.models.Model(inputs, outputs)
+
 def make_generator():
     inputs = tf.keras.layers.Input(shape=(Z_DIM,))
 
@@ -85,18 +108,20 @@ def make_generator():
 
     x = tf.keras.layers.Reshape((7, 7, 256))(x)
 
-    x = tf.keras.layers.Conv2DTranspose(
-        128, (5, 5), padding='same', use_bias=False)(x)
+    x = tf.keras.layers.Conv2D(
+        64, (3, 3), padding='same', use_bias=False)(x)
     x = tf.keras.layers.BatchNormalization()(x)
     x = tf.keras.layers.LeakyReLU(0.2)(x)
 
-    x = tf.keras.layers.Conv2DTranspose(
-        64, (5, 5), strides=(2, 2), padding='same', use_bias=False)(x)
+    x = tf.keras.layers.UpSampling2D()(x)
+    x = tf.keras.layers.Conv2D(
+        128, (3, 3), padding='same', use_bias=False)(x)
     x = tf.keras.layers.BatchNormalization()(x)
     x = tf.keras.layers.LeakyReLU(0.2)(x)
 
-    outputs = tf.keras.layers.Conv2DTranspose(1, (5, 5), strides=(
-        2, 2), padding='same', use_bias=False, activation='sigmoid')(x)
+    x = tf.keras.layers.UpSampling2D()(x)
+    outputs = tf.keras.layers.Conv2D(
+        1, (3, 3), padding='same', use_bias=False, activation='sigmoid')(x)
     return tf.keras.models.Model(inputs, outputs)
 
 
@@ -119,7 +144,7 @@ class GANMonitor(tf.keras.callbacks.Callback):
         self.latent_dim = latent_dim
 
     def on_epoch_end(self, epoch, logs=None):
-        if epoch % (ITERATION//20) != 0:
+        if epoch % 100 != 0:
             return
         random_latent_vectors = tf.random.normal(
             shape=(self.num_img, self.latent_dim))
@@ -200,8 +225,8 @@ if __name__ == '__main__':
 
     model = DeepCNNGAN()
     model.summary()
-    gen_optimizer = tf.keras.optimizers.SGD(G_LR)
-    disc_optimizer = tf.keras.optimizers.SGD(D_LR)
+    gen_optimizer = tf.keras.optimizers.Adam(G_LR)
+    disc_optimizer = tf.keras.optimizers.Adam(D_LR)
     model.compile(g_loss=g_loss_fn, d_loss=d_loss_fn,
                   g_opt=gen_optimizer, d_opt=disc_optimizer)
     model.fit(train, epochs=ITERATION, callbacks=callbacks+[GANMonitor()])

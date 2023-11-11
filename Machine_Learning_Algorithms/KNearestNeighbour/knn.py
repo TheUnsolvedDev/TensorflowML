@@ -3,65 +3,63 @@ import tensorflow as tf
 import matplotlib.pyplot as plt
 
 
-def predict(X_t, y_t, x_t, k_t):
-    neg_one = tf.constant(-1.0, dtype=tf.float64)
-    distances = tf.reduce_sum(tf.abs(tf.subtract(X_t, x_t)), 1)
-    neg_distances = tf.multiply(distances, neg_one)
-    vals, indx = tf.nn.top_k(neg_distances, k_t)
-    y_s = tf.gather(y_t, indx)
-    return y_s
+class Dataset:
+    num_points = 1000
+    num_classes = 3
+
+    def __init__(self, plot=False) -> None:
+        self.plot = plot
+
+    def create(self):
+        mus = [[0, 0], [5, 5], [10, 0]]
+        covars = [
+            [[1.2, 0], [0, 1.4]],
+            [[1.5, 0], [0, 1.5]],
+            [[1, 0], [0, 1]]
+        ]
+        x0 = np.random.multivariate_normal(
+            mus[0], covars[0], Dataset.num_points)
+        x1 = np.random.multivariate_normal(
+            mus[1], covars[1], Dataset.num_points)
+        x2 = np.random.multivariate_normal(
+            mus[2], covars[2], Dataset.num_points)
+        y0 = np.zeros(Dataset.num_points)
+        y1 = np.ones(Dataset.num_points)
+        y2 = np.ones(Dataset.num_points)*2
+        X, y = np.concatenate([x0, x1, x2], axis=0), np.concatenate([y0, y1, y2], axis=0)
+        if self.plot:
+            self.plot_graph(X, y)
+        return X, y
+
+    def plot_graph(self, X, y):
+        plt.scatter(X[:, 0], X[:, 1], c=y)
+        plt.show()
 
 
-def get_label(preds):
-    counts = np.bincount(np.array(preds,dtype = np.int64))
-    return np.argmax(counts)
+class KnearestNeighbors:
+    def __init__(self, data, labels, K=10):
+        self.data = data
+        self.labels = labels
+        self.classes = np.unique(self.labels)
+        self.K = K
+
+    @tf.function
+    def euclidean_distance(self, point1, point2):
+        return tf.math.sqrt(tf.reduce_sum(tf.square(point1 - point2), axis=1))
+
+    def predict(self, point):
+        distances = self.euclidean_distance(self.data, point)
+        k_indices = np.argsort(distances)[:self.K]
+        k_class = np.array([self.labels[i] for i in k_indices])
+        counts = [np.count_nonzero(k_class == i) for i in self.classes]
+        return np.argmax(counts)
 
 
 if __name__ == '__main__':
-    num_points_each_cluster = 100
-    mu1 = [-0.4, 3]
-    covar1 = [[1.3, 0], [0, 1]]
-    mu2 = [0.5, 0.75]
-    covar2 = [[2.2, 1.2], [1.8, 2.1]]
-
-    X1 = np.random.multivariate_normal(
-        mu1, covar1, num_points_each_cluster)
-    X2 = np.random.multivariate_normal(
-        mu2, covar2, num_points_each_cluster)
-    y1 = np.ones(num_points_each_cluster)
-    y2 = np.zeros(num_points_each_cluster)
-
-    plt.plot(X1[:, 0], X1[:, 1], 'ro', label='class 1')
-    plt.plot(X2[:, 0], X2[:, 1], 'bo', label='class 0')
-    plt.legend(loc='best')
-    plt.show()
-
-    X = np.vstack((X1, X2))
-    y = np.hstack((y1, y2))
-
-    X_tf = tf.constant(X)
-    y_tf = tf.constant(y)
-
-    example = np.array([0, 0])
-    example_tf = tf.constant(example, dtype=tf.float64)
-
-    plt.plot(X1[:, 0], X1[:, 1], 'ro', label='class 1')
-    plt.plot(X2[:, 0], X2[:, 1], 'bo', label='class 0')
-    plt.plot(example[0], example[1], 'g', marker='D',
-             markersize=10, label='test point')
-    plt.legend(loc='best')
-    plt.show()
-
-    k_tf = tf.constant(3)
-    y_index = predict(X_tf, y_tf, example_tf, k_tf)
-    print(get_label(y_index))
-
-    example_2 = np.array([0.1, 2.5])
-    example_2_tf = tf.constant(example_2)
-
-    plt.plot(X1[:, 0], X1[:, 1], 'ro', label='class 1')
-    plt.plot(X2[:, 0], X2[:, 1], 'bo', label='class 0')
-    plt.plot(example_2[0], example_2[1], 'g',
-             marker='D', markersize=10, label='test point')
-    plt.legend(loc='best')
-    plt.show()
+    data = Dataset(plot=True)
+    X, y = data.create()
+    
+    knn = KnearestNeighbors(X, y)
+    test = [[0, 0], [6, 5], [10, 0]]
+    
+    print(knn.predict(test[1]))
