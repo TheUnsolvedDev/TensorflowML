@@ -1,135 +1,130 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import tensorflow as tf
-from mpl_toolkits.mplot3d import Axes3D
 from matplotlib import style
 style.use('ggplot')
 
+NUM_DATA = 1000
+NUM_FEATURES = 2
+TRAIN_RATIO = 0.8
 
-class lg_dataset:
+
+class Dataset:
     def __init__(self):
-        self.train_size = 2000
-        self.train_param1 = tf.random.uniform([100], minval=2, maxval=10)
-        self.train_param2 = tf.random.uniform([100], minval=50, maxval=110)
-        self.train_data = tf.stack(
-            [self.train_param1, self.train_param2], axis=1)
-        self.test_size = 200
-        self.train_param11 = tf.random.uniform([100], minval=12, maxval=20)
-        self.train_param22 = tf.random.uniform([100], minval=60, maxval=120)
-        self.train_data = tf.concat([self.train_data, tf.stack(
-            [self.train_param11, self.train_param22], axis=1)], 0)
-        self.train_label = tf.random.uniform([100], minval=1, maxval=5)
-        self.train_label = tf.concat(
-            [self.train_label, tf.random.uniform([100], minval=-1, maxval=-5)], 0)
+        pass
 
-        self.train_label = np.array([int(a > 0) for a in self.train_label])
-        self.train_label[self.train_label == 0] = -1
+    def get_data(self):
+        X = np.random.normal(0.5, 0.2, (NUM_DATA, 2)).astype(np.float32)
+        yB = (np.random.uniform(0, 1, NUM_DATA) > 0.5).astype(np.float32)
+        y = (2. * yB - 1)
+        X *= y[:, np.newaxis]
+        X -= X.mean(axis=0)
+        train_data, train_label = X[:int(
+            len(X)*TRAIN_RATIO)], y[:int(len(X)*TRAIN_RATIO)]
+        test_data, test_label = X[int(
+            len(X)*TRAIN_RATIO):], y[int(len(X)*TRAIN_RATIO):]
 
-    def load_data(self):
-        return (self.train_data, self.train_label)
-
-    def plot(self):
-        fig = plt.figure()
-        ax = fig.add_subplot(111, projection='3d')
-        ax.set_xlabel('param1')
-        ax.set_ylabel('param2')
-        ax.set_zlabel('targets')
-        ax.scatter(self.train_data[:, 0], self.train_data[:, 1],
-                   self.train_label, c='g', label="ground truth", cmap='coolwarm')
-        ax.legend()
-        plt.show()
+        return (train_data, train_label), (test_data, test_label)
 
 
-def load_data(dataset_name, plot=False):
-    if dataset_name == 'svm':
-        __dataset = lg_dataset()
-        if plot:
-            __dataset.plot()
-        return __dataset.load_data()
-    else:
-        raise ValueError('Dataset not found')
+def support_vector_model():
+    inputs = tf.keras.layers.Input(shape=(NUM_FEATURES,))
+    outputs = tf.keras.layers.Dense(1, kernel_regularizer=tf.keras.regularizers.l2(0.01))(inputs)
+    return tf.keras.Model(inputs=inputs, outputs=outputs)
 
 
-class svm_model:
-    def __init__(self, train_data, train_label, epochs=250, visualization=True) -> None:
-        self.train_data = (train_data - np.mean(train_data,
-                                                axis=0)) / np.std(train_data, axis=0)
-        self.train_label = train_label
+def accuracy(y_true, y_pred):
+    return np.mean(y_true == np.sign(y_pred))
 
-        self.colors = {1: 'r', -1: 'b'}
 
-        self.epochs = epochs
-        self.epsilon = 1
-        self.optimizer = tf.keras.optimizers.Adam(learning_rate=0.1)
-        self.loss = tf.keras.losses.Hinge()
-
-        self.w = tf.Variable(tf.random.normal([2, 1]))
-        self.b = tf.Variable(tf.random.normal([1]))
+class SupportVectorMachine:
+    def __init__(self, C=1, epochs=500, batch_size=125):
+        self.C = C
+        self.num_epochs = epochs
+        self.batch_size = batch_size
+        self.model = support_vector_model()
+        self.optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
 
     # @tf.function
-    # def model(self, x):
-    #     return tf.linalg.matmul(x, self.w) - self.b
+    def loss(self, y_true, y_pred):
+        return self.C*tf.keras.losses.hinge(y_true, y_pred)
 
-    def svc(self):
-        inputs = tf.keras.layers.Input(shape=(2,))
-        outputs = tf.keras.layers.Dense(
-            1, kernel_regularizer=tf.keras.regularizers.l2(0.01))(inputs)
+    @tf.function
+    def train_step(self, X_batch, Y_batch):
+        with tf.GradientTape(persistent=True) as tape:
+            pred = self.model(X_batch)
+            loss = self.loss(Y_batch, pred)
+            loss = tf.reduce_mean(loss)
+        grads = tape.gradient(loss, self.model.trainable_variables)
+        self.optimizer.apply_gradients(
+            zip(grads, self.model.trainable_variables))
+        return loss
 
-        model = tf.keras.Model(inputs=inputs, outputs=outputs)
-        model.compile(loss=self.loss, optimizer=self.optimizer)
-        return model
+    def fit(self, train, test):
+        X, y = train
+        X_test, y_test = test
+        self.num_batches = len(X)//self.batch_size
+        for epoch in range(self.num_epochs):
+            for ind in range(self.num_batches):
+                X_batch = X[(ind*self.batch_size):(ind+1)*self.batch_size]
+                y_batch = y[(ind*self.batch_size):(ind+1)*self.batch_size]
+                loss = self.train_step(X_batch, y_batch).numpy()
 
-    def train(self):
-        self.svc_clf = self.svc()
-        self.svc_clf.fit(self.train_data, self.train_label, epochs=self.epochs)
-        self.w = self.svc_clf.get_weights()[0]
-        self.b = self.svc_clf.get_weights()[1]
+            if epoch % 10 == 0:
+                X_train_batch = X[(ind*self.batch_size):(ind+1)*self.batch_size]
+                y_train_batch = y[(ind*self.batch_size):(ind+1)*self.batch_size]
+                pred_train_batch = self.model(X_train_batch)
 
-    def predict(self, x):
-        return self.model(x)
+                X_test_batch = X_test[int((ind*self.batch_size)/TRAIN_RATIO*(1-TRAIN_RATIO)):int(
+                    (ind+1)*self.batch_size/TRAIN_RATIO*(1-TRAIN_RATIO))]
+                y_test_batch = y_test[int((ind*self.batch_size)/TRAIN_RATIO*(1-TRAIN_RATIO)):int(
+                    (ind+1)*self.batch_size/TRAIN_RATIO*(1-TRAIN_RATIO))]
+                pred_test_batch = self.model(X_test_batch)
+                print("[", epoch+1, "/", self.num_epochs, "]", "loss:", round(loss, 4), 'Train Accuracy:', accuracy(
+                    y_train_batch, pred_train_batch), 'Test Accuract:', accuracy(y_test_batch, pred_test_batch))
+        return self.model
 
-    def visualize_svm(self):
-        def get_hyperplane_value(x, w, b, offset):
-            return (-w[0] * x + b + offset) / w[1]
 
-        fig = plt.figure()
-        ax = fig.add_subplot(1, 1, 1)
-        plt.scatter(
-            self.train_data[:, 0], self.train_data[:, 1], marker="o", c=self.train_label)
+def make_meshgrid(x, y, h=.02):
+    x_min, x_max = x.min(), x.max()
+    y_min, y_max = y.min(), y.max()
+    xx, yy = np.meshgrid(np.arange(x_min, x_max, h),
+                         np.arange(y_min, y_max, h))
+    return xx, yy
 
-        x0_1 = np.min(self.train_data[:, 0])
-        x0_2 = np.max(self.train_data[:, 0])
 
-        x1_1 = get_hyperplane_value(x0_1, self.w, self.b, 0)
-        x1_2 = get_hyperplane_value(x0_2, self.w, self.b, 0)
-
-        x1_1_m = get_hyperplane_value(x0_1, self.w, self.b, -1)
-        x1_2_m = get_hyperplane_value(x0_2, self.w, self.b, -1)
-
-        x1_1_p = get_hyperplane_value(x0_1, self.w, self.b, 1)
-        x1_2_p = get_hyperplane_value(x0_2, self.w, self.b, 1)
-
-        ax.plot([x0_1, x0_2], [x1_1, x1_2], "y--")
-        ax.plot([x0_1, x0_2], [x1_1_m, x1_2_m], "k")
-        ax.plot([x0_1, x0_2], [x1_1_p, x1_2_p], "k")
-
-        x1_min = np.amin(self.train_data[:, 1])
-        x1_max = np.amax(self.train_data[:, 1])
-        ax.set_ylim([x1_min - 0.75, x1_max + 0.75])
-
-        ax.set_xlabel('param1')
-        ax.set_ylabel('param2')
-        ax.legend()
-        ax.set_title('SVM')
-        plt.show()
+def get_hyperplane_value(x, w, b, offset):
+    return (-w[0] * x + b + offset) / w[1]
 
 
 if __name__ == '__main__':
-    dataset_name = 'svm'
-    dataset = load_data(dataset_name, plot=True)
-    (train_data, train_label) = dataset
-    print(train_data.shape, train_label.shape)
+    obj = Dataset()
+    train, test = obj.get_data()
 
-    clf = svm_model(train_data, train_label)
-    clf.train()
-    clf.visualize_svm()
+    reg = SupportVectorMachine()
+    model = reg.fit(train, test)
+
+    X, y = train
+    X0, X1 = X[:, 0], X[:, 1]
+    xx, yy = make_meshgrid(X0, X1)
+    fig, ax = plt.subplots()
+
+    x0_1, x0_2 = np.min(X0), np.max(X0)
+    w, b = model.get_weights()
+    x1_1 = get_hyperplane_value(x0_1, w, b, 0)
+    x1_2 = get_hyperplane_value(x0_2, w, b, 0)
+
+    x1_1_m = get_hyperplane_value(x0_1, w, b, -1)
+    x1_2_m = get_hyperplane_value(x0_2, w, b, -1)
+
+    x1_1_p = get_hyperplane_value(x0_1, w, b, 1)
+    x1_2_p = get_hyperplane_value(x0_2, w, b, 1)
+
+    ax.plot([x0_1, x0_2], [x1_1, x1_2], "y--")
+    ax.plot([x0_1, x0_2], [x1_1_m, x1_2_m], "k")
+    ax.plot([x0_1, x0_2], [x1_1_p, x1_2_p], "k")
+
+    ax.scatter(X0, X1, c=y, cmap=plt.cm.coolwarm, s=20, edgecolors='k')
+    ax.set_ylabel('x_1')
+    ax.set_xlabel('x_0')
+    plt.show()

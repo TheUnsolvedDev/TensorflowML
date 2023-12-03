@@ -1,106 +1,115 @@
-# Machine-Learning-with-Tensorflow-2
-A repository comprising the algorithms of Machine Learning implemented on tensorflow 2 with keras and many other special machine learning libraries. If you find this useful please share and give your valuable insights.
+#  Introduction: 
+A  repository dedicated to implement many sorts of algorithms in  Machine Learning, Deep Learning and Reinforcement Learning using TensorFlow 2 (emphasising heavily in this library) and many  other libraries.
 
-```
-├── ComputerVision
-│   ├── AutoEncoders
-│   │   ├── ContractiveAutoencoder
-│   │   ├── ConvolutionalAutoEncoder
-│   │   ├── DenoiseAutoEncoder
-│   │   ├── SparseAutoEncoder
-│   │   ├── StackedAutoEncoder
-│   │   ├── VanillaAutoencoder
-│   │   └── VariationalAutoEncoder
-│   ├── GAN
-│   │   ├── ConditionalGan
-│   │   ├── CycleGAN
-│   │   ├── DeepConvolutionalGAN
-│   │   ├── DeepRegretAnalyticGAN
-│   │   ├── InitialGAN
-│   │   ├── LeastSquareGan
-│   │   ├── StarGAN
-│   │   ├── SuperResolutionGAN
-│   │   ├── WassersteinGAN
-│   │   └── WassersteinImprovedGAN
-│   ├── ImageClassification
-│   │   ├── LargeNetwork
-│   │   │   ├── AlexNet
-│   │   │   ├── CapsuleNetwork
-│   │   │   ├── DenseNet
-│   │   │   ├── HighwayNet
-│   │   │   ├── InceptionNet
-│   │   │   │   ├── InceptionV1
-│   │   │   │   └── InceptionV2
-│   │   │   ├── NetworkInNetwork
-│   │   │   ├── ResidualAttentionNet
-│   │   │   ├── ResNet
-│   │   │   ├── ResNext
-│   │   │   ├── SENet
-│   │   │   ├── VGGNet
-│   │   │   └── VisionTransformer
-│   │   ├── Robustness
-│   │   │   ├── AdversarialSaliencyMaps
-│   │   │   ├── BlackBoxAttacks
-│   │   │   ├── FastGradientSignMethod
-│   │   │   └── IterativeLeastLikelyMethod
-│   │   └── SmallNetwork
-│   │       ├── DeepCompression
-│   │       ├── FractalNet
-│   │       ├── KnowledgeDistillation
-│   │       ├── Lenet5
-│   │       ├── MLP-Mixer
-│   │       ├── MobileNet
-│   │       ├── PolyNet
-│   │       ├── ShuffleNet
-│   │       ├── SqueezeNet
-│   │       ├── XceptionNet
-│   │       ├── XNOR-Net
-│   │       └── ZFNet
-│   └── Misc
-│       ├── GeneticCNN
-│       └── StyleTransfer
-├── Machine_Learning_Algorithms
-│   ├── KNearestNeighbour
-│   ├── LinearRegression
-│   ├── LogisticRegression
-│   ├── NaiveBayesClassifier
-│   └── SupportVectorMachine
-└── Miscellaneous
-    ├── EmpiricalRiskMinimization
-    ├── GaussianCDF
-    ├── GradientAccumulation
-    ├── Initialization_and_gradient_test
-    └── Regularization_with_NM_optimization
+# Algorithms:
+## [x] Machine Learning:
+- [x] Linear Regression
+- [ ] Kernel Linear Regression
+- [x] Logistic Regression (0,1)
+- [ ] Logistic Regression (-1,1)
+- [ ] Kernel Logistic Regression
+- [x] K Nearest Neighbours
+- [ ] K Means Clustering
+- [x] Naive Bayes Classifier
+- [x] Linear Support Vector Machine
+- [x] Non Linear Support Vector Machine
 
+## [x] Computer Vision:
+- Auto-encoders
+	- [x] Vanilla Autoencoder
+	- [x] Convolutional Autoencoder
+	- [x] Sparse Autoencoder
+	- [x] Stacked Autoencoder
+	- [x] Denoise Autoencoder
+	- [x] Variational Autoencoder
+	- [x] Contractive Autoencoder
+	- [ ] Adversarial  Autoencoder
+	- [ ] Self-attention Autoencoder
+	- [ ] Recurrent Autoencoder
+	- [ ] Sparse Variational Autoencoder
+	- [ ] Beta Variational Autoencoder
+	- [ ] Transformative Autoencoder
+- Generative Adversarial Network
+	- [x] Deep ANN GAN
+	- [x] Deep Convolutional GAN
+	- [x] Conditional GAN
+	- [x] Least Square GAN
+	- [x] Wasserstein GAN
+	- [x] Wasserstein Improved GAN
+	- [x] Deep Regret Analytic GAN
+	- [x] Cycle GAN
+	- [x] Star GAN
+	- [ ] Super Resolution GAN
+- Image Classification
+	- Large Network
+		- [x] AlexNet
+		- [x] VGG Net
+		- [x] Inception Net
+			- [x] Inception V1 (Google Net)
+			- [x] Inception V2
+			- [x] Inception V3
+			- [ ] Inception V4
+		- [x] Residual Net
+		- [x] Res Next
+		- [x] SeNet
+		- [x] Dense Net
+		- [x] Highway Net
+		- [x] Network In Network
+		- [x] Vision Transformer
+		- [x] Residual Attention Net
+		- [x] Capsule Network
+	- Small Network
+		- [x] LeNet
+		- [x] ZFNet
+		- [x] Deep Compression
+		- [x] Knowledge Distillation
+		- [x] MLP-Mixer
+		- [x] Mobile Net
+		- [x] Poly Net
+		- [x] Shuffle Net
+		- [x] Squeeze Net
+		- [x] Xception Net
+		- [x] XNOR-Net
+	- Robustness
+		- [x] Adversarial Saliency Maps
+		- [x] Black Box Methods
+		- [x] Fast Gradient Sign Method
+		- [x] Iterative Least Likely Method
+- Miscellaneous
+	- [x] Genetic CNN
+	- [x] Style Transfer
+	- [x] Empirical Risk Minimisation
+	- [x] Gaussian CDF
+	- [x] Gradient Accumulation
+	- [x] Gradient test for Initialisation
+	- [x] Regularisation with Nelder Mead Optimisation
 
-
-```
-
-Before trying, follow these steps:
-
-  Install the neccessary libraries and modules
-   - Activate your *virtualenv*
-   - Run the following command in your terminal(LINUX) or cmd(WINDOWS)
- 
-  ###  Installation process :
-  ```bash
-  pip3 install tensorflow[and-cuda] #if you've an nvidia-gpu with cuda support
-  pip3 install pandas
-  pip3 install numpy
-  pip3 install matplotlib
-  pip3 install sklearn
-  pip3 install tensorflow_probability
-  ```
-  
-  ## Fire up your terminal/cmd
-  ```bash
-  sh setup.sh
-  ```
-   
-   # 🤖 Linux or Windows:
-   ```bash
-   python3 <file_name>.py
-   ```
+## [x] Reinforcement Learning:
+-  Memory:
+	- [ ] Replay Buffer
+	- [ ] Non Buffer
+	- [ ] Prioritised Experience Replay
+-  Strategies:
+	- Value Based:
+		- [ ] DQN
+		- [ ] Double DQN
+		- [ ] Duelling DQN
+		- [ ] Double Duelling DQN
+		- [ ] Rainbow
+		- [ ] C51
+	- Policy Based:
+		- [ ] PG (vanilla)
+		- [ ] Reinforce
+		- [ ] Trusted Region PO (TRPO)
+		- [ ] Proximal PO (PPO)
+		- [ ] ACKTR
+	- Actor Critic Based:
+		- [ ] Vanilla AC
+		- [ ] Advantageous AC (A2C)
+		- [ ] Asynchronous Advanatageous AC (A3C)
+		- [ ] Soft AC (SAC)
+		- [ ] Deep Deterministic PG (DDPG)
+		- [ ] Twin Delayed DDPG (TD3)
 
 # Contributions
 Contributions are welcome! If you have implemented a new insights or have improvements to existing implementations, feel free to submit a pull request. Please follow the contribution guidelines outlined in the repository.
@@ -109,4 +118,3 @@ Contributions are welcome! If you have implemented a new insights or have improv
 This project is licensed under the GNU General Public License v3.0 - see the LICENSE file for details.
 
 Happy generating! 
-  
