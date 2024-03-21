@@ -6,6 +6,8 @@
 *.png
 *.pdf
 *.h5
+*.mp4
+*.json
 __pycache__/
 logs/
 Datasets/

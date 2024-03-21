@@ -75,11 +75,12 @@ class Policy:
 
 
 class PG_Agent:
-    def __init__(self,):
+    def __init__(self, use_mean_baseline=True):
         self.network = PolicyNetwork(input_shape=(4,), output_shape=2)
         self.source = self.network.source_model
         self.gamma = GAMMA
         self.alpha = LR
+        self.use_mean_baseline = use_mean_baseline
         self.optimizer = tf.keras.optimizers.Adam(learning_rate=self.alpha)
 
     def act(self, state):
@@ -91,6 +92,8 @@ class PG_Agent:
         for t in reversed(range(len(rewards))):
             running_add = running_add * gamma + rewards[t]
             discounted_rewards[t] = running_add
+        if self.use_mean_baseline:
+            return discounted_rewards - np.mean(rewards)
         return discounted_rewards
 
     @tf.function
@@ -158,7 +161,7 @@ def simulate(num_games=1000, num_episodes=1000):
         state = next_state
         if done:
             states, actions, rewards = buffer.sample()
-            discounted_rewards = agent.discount_rewards(rewards,agent.gamma)
+            discounted_rewards = agent.discount_rewards(rewards, agent.gamma)
             loss = agent.update(states, actions, discounted_rewards)
             writer.add_scalar("Loss/train", float(loss), game)
             state, obs = train.reset()
@@ -177,7 +180,6 @@ def simulate(num_games=1000, num_episodes=1000):
                     break
             writer.add_scalar("Rewards/test", rewards_history, game)
             gc.collect()
-
 
 
 if __name__ == '__main__':
