@@ -64,14 +64,16 @@ class Buffer:
 class Policy:
     @staticmethod
     def action_value(model, state):
-        state = np.array(state)
+        state = tf.convert_to_tensor(state, dtype=tf.float32)
 
         @tf.function
         def call_model(model, state):
-            return model(state)
+            return model(state, training=False)
 
-        probs = call_model(model, state).numpy()
-        return np.random.choice(2, p=probs[0])
+        probs = call_model(model, state)
+        action_dist = tfp.distributions.Categorical(probs)
+        action = action_dist.sample()
+        return action.numpy()[0]
 
 
 class PG_Agent:
@@ -93,7 +95,7 @@ class PG_Agent:
             running_add = running_add * gamma + rewards[t]
             discounted_rewards[t] = running_add
         if self.use_mean_baseline:
-            return discounted_rewards - np.mean(rewards)
+            return discounted_rewards #- np.mean(rewards)
         return discounted_rewards
 
     @tf.function
@@ -145,7 +147,7 @@ class Environment:
         return self.train, self.test
 
 
-def simulate(num_games=1000, num_episodes=1000):
+def simulate(num_games=500, num_episodes=1000):
     env = Environment()
     agent = PG_Agent()
     buffer = Buffer()
@@ -165,6 +167,7 @@ def simulate(num_games=1000, num_episodes=1000):
             loss = agent.update(states, actions, discounted_rewards)
             writer.add_scalar("Loss/train", float(loss), game)
             state, obs = train.reset()
+            gc.collect()
 
         if game % num_episodes == 0:
             test_state = test.reset()[0]
