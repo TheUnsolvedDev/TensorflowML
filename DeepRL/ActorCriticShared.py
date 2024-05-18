@@ -66,14 +66,15 @@ class AC_Agent:
         return Policy.action_value(self.actor_critic_source, state)
 
     @tf.function
-    def update(self, states, actions, rewards, next_states, dones):
+    def update(self, states, actions, rewards, next_states, dones, I):
         if len(states.shape) < 2:
             states = tf.expand_dims(states, axis=0)
         if len(next_states.shape) < 2:
             next_states = tf.expand_dims(next_states, axis=0)
-        actions = tf.cast(actions, tf.float32)
+        # actions = tf.cast(actions, tf.float32)
         with tf.GradientTape() as actor_critic_tape:
-            actor_critic_tape.watch(self.actor_critic_source.trainable_variables)
+            actor_critic_tape.watch(
+                self.actor_critic_source.trainable_variables)
             probs, state_value = self.actor_critic_source(states)
             _, next_state_value = self.actor_critic_source(next_states)
 
@@ -81,7 +82,9 @@ class AC_Agent:
             log_prob = action_dist.log_prob(probs)
             delta = rewards + self.gamma * \
                 (1.0 - dones)*next_state_value - state_value
-            actor_loss = - tf.reduce_sum(log_prob*actions, axis=1)*delta
+            actor_loss = - \
+                tf.reduce_sum(
+                    log_prob*tf.one_hot(actions, depth=2), axis=1)*delta
             critic_loss = delta**2
             loss = actor_loss + critic_loss
         actor_critic_gradients = actor_critic_tape.gradient(
@@ -132,17 +135,19 @@ def simulate(num_games=500, num_episodes=1000):
     train, test = env.get_environments()
     actor_loss, critic_loss = 0.00, 0.00
     state, obs = train.reset()
+    I = 1
     for game in tqdm.tqdm(range(num_games*num_episodes)):
         state = np.expand_dims(state, axis=0)
         action = agent.act(state)
         next_state, reward, done, truncated, info = train.step(action)
-
+        I *= agent.gamma
         actor_loss, critic_loss = agent.update(
-            state, action, reward, next_state, done)
+            state, action, reward, next_state, done, I)
         writer.add_scalar("Actor_Loss/train", float(actor_loss), game)
         writer.add_scalar("Critic_Loss/train", float(critic_loss), game)
         state = next_state
         if done:
+            I = 1
             state, obs = train.reset()
             gc.collect()
 

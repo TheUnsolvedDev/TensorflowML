@@ -44,4 +44,4 @@ def find_python_files(root_dir='./'):
 
 if __name__ == "__main__":
     print(find_python_files())
-    main_threaded()
+    # main_threaded()
