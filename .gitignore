@@ -11,7 +11,16 @@
 *.jpg
 *.jpeg
 *.json
+*.v2
+*.tfevents.*
+*/checkpoints/*
 __pycache__/
 logs/
 Datasets/
 GPU_tf/
+*.index
+*.data-00000-of-00001
+*.data-00000-of-00002
+*.data-00001-of-00002
+*.zip
+*.tfrecord-00000-of-00001
