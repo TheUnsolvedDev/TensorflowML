@@ -7,6 +7,9 @@
 *.pdf
 *.h5
 *.mp4
+*.txt
+*.jpg
+*.jpeg
 *.json
 __pycache__/
 logs/
