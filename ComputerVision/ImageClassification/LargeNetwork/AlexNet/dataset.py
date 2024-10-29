@@ -1,6 +1,7 @@
 import silence_tensorflow.auto
 import tensorflow as tf
 import numpy as np
+import os
 
 from config import *
 
@@ -68,11 +69,12 @@ class Dataset:
 
 
 if __name__ == "__main__":
-    dataset = Dataset()
-    for type in dataset.data_types:
-        train_ds, validation_ds, test_ds, num_classes, channels = dataset.load_data(
-            type)
-        for image, label in validation_ds.take(1):
-            print(image.shape)
-            print(label.shape)
-            break
+    # dataset = Dataset()
+    # for type in dataset.data_types:
+    #     train_ds, validation_ds, test_ds, num_classes, channels = dataset.load_data(
+    #         type)
+    #     for image, label in validation_ds.take(1):
+    #         print(image.shape)
+    #         print(label.shape)
+    #         break
+    dataset = BirdsDataset()
