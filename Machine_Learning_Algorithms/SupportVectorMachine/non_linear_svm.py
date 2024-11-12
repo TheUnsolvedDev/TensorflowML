@@ -1,9 +1,6 @@
 import re
 import numpy as np
 import matplotlib.pyplot as plt
-from numpy.core.numeric import outer
-from scipy.sparse import data
-import sklearn
 import tensorflow as tf
 import seaborn as sns
 from sklearn import datasets
