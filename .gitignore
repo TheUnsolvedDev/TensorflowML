@@ -24,3 +24,4 @@ GPU_tf/
 *.data-00001-of-00002
 *.zip
 *.tfrecord-00000-of-00001
+/ComputerVision/ObjectDetection/Yolo/pascal_voc
