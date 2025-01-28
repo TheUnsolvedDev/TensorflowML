@@ -3,13 +3,10 @@
 *.gpu
 *.ptx
 .vscode
-*.png
 *.pdf
 *.h5
 *.mp4
 *.txt
-*.jpg
-*.jpeg
 *.json
 *.v2
 *.tfevents.*
@@ -25,3 +22,4 @@ GPU_tf/
 *.zip
 *.tfrecord-00000-of-00001
 /ComputerVision/ObjectDetection/Yolo/pascal_voc
+/ComputerVision/ObjectDetection/Yolo
