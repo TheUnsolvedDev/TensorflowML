@@ -8,6 +8,35 @@ from config import *
 kernel_init = tf.keras.initializers.glorot_uniform()
 bias_init = tf.keras.initializers.Constant(value=0.2)
 
+class LocalResponseNormalization(tf.keras.layers.Layer):
+    def __init__(self, alpha=0.0001, beta=0.75, depth_radius=5, **kwargs):
+        super(LocalResponseNormalization, self).__init__(**kwargs)
+        self.alpha = alpha
+        self.beta = beta
+        self.depth_radius = depth_radius
+
+    def build(self, input_shape):
+        self.channels = input_shape[-1]  # Get the number of channels
+        self.kernel = self.add_weight(
+            shape=(1, 1, self.channels, 1),
+            initializer=tf.keras.initializers.Ones(),
+            trainable=False
+        )
+
+    def call(self, x):
+        squared = tf.square(x)
+        window_sum = tf.nn.depthwise_conv2d(
+            squared,
+            self.kernel,
+            strides=[1, 1, 1, 1],
+            padding="SAME"
+        )
+        norm = tf.pow(1 + self.alpha * window_sum, -self.beta)
+        return x * norm
+
+    def compute_output_shape(self, input_shape):
+        return input_shape
+
 def inception_module(x,
                      filters_1x1,
                      filters_3x3_reduce,
@@ -48,8 +77,14 @@ def inception1_model(input_shape=[INPUT_SIZE[0], INPUT_SIZE[1], INPUT_SIZE[2]], 
                                name='conv_1_7x7_2', kernel_initializer=kernel_init, bias_initializer=bias_init)(x)
     x = tf.keras.layers.MaxPool2D(
         (3, 3), padding='same', strides=(2, 2), name='max_pool_1_3x3_2')(x)
-    x = tf.keras.layers.Conv2D(64, (1, 1), padding='same', strides=(
+    x = LocalResponseNormalization()(x)
+    
+    x = tf.keras.layers.Conv2D(192, (3, 3), padding='same', strides=(
         1, 1), activation='relu', name='conv_2a_3x3_1')(x)
+    x = tf.keras.layers.MaxPool2D(
+        (3, 3), padding='same', strides=(2, 2), name='max_pool_2_3x3_2')(x)
+    x = LocalResponseNormalization()(x)
+    
     x = inception_module(x,
                          filters_1x1=64,
                          filters_3x3_reduce=96,
@@ -58,6 +93,14 @@ def inception1_model(input_shape=[INPUT_SIZE[0], INPUT_SIZE[1], INPUT_SIZE[2]], 
                          filters_5x5=32,
                          filters_pool_proj=32,
                          name='inception_3a')
+    x = inception_module(x,
+                         filters_1x1=128,
+                         filters_3x3_reduce=128,
+                         filters_3x3=192,
+                         filters_5x5_reduce=32,
+                         filters_5x5=96,
+                         filters_pool_proj=64,
+                         name='inception_3b')
     x = tf.keras.layers.MaxPool2D(
         (3, 3), padding='same', strides=(2, 2), name='max_pool_3_3x3_2')(x)
     x = inception_module(x,
@@ -75,7 +118,7 @@ def inception1_model(input_shape=[INPUT_SIZE[0], INPUT_SIZE[1], INPUT_SIZE[2]], 
     x1 = tf.keras.layers.Dense(1024, activation='relu')(x1)
     x1 = tf.keras.layers.Dropout(0.7)(x1)
     x1 = tf.keras.layers.Dense(
-        10, activation='softmax', name='auxilliary_output_1')(x1)
+        num_classes, activation='softmax', name='auxilliary_output_1')(x1)
     x = inception_module(x,
                          filters_1x1=160,
                          filters_3x3_reduce=112,
@@ -92,6 +135,14 @@ def inception1_model(input_shape=[INPUT_SIZE[0], INPUT_SIZE[1], INPUT_SIZE[2]], 
                          filters_5x5=64,
                          filters_pool_proj=64,
                          name='inception_4c')
+    x = inception_module(x,
+                         filters_1x1=112,
+                         filters_3x3_reduce=144,
+                         filters_3x3=288,
+                         filters_5x5_reduce=32,
+                         filters_5x5=64,
+                         filters_pool_proj=64,
+                         name='inception_4d')
     x2 = tf.keras.layers.AveragePooling2D((5, 5), strides=3)(x)
     x2 = tf.keras.layers.Conv2D(
         128, (1, 1), padding='same', activation='relu')(x2)
@@ -99,7 +150,7 @@ def inception1_model(input_shape=[INPUT_SIZE[0], INPUT_SIZE[1], INPUT_SIZE[2]], 
     x2 = tf.keras.layers.Dense(1024, activation='relu')(x2)
     x2 = tf.keras.layers.Dropout(0.7)(x2)
     x2 = tf.keras.layers.Dense(
-        10, activation='softmax', name='auxilliary_output_2')(x2)
+        num_classes, activation='softmax', name='auxilliary_output_2')(x2)
     x = inception_module(x,
                          filters_1x1=256,
                          filters_3x3_reduce=160,
@@ -118,6 +169,14 @@ def inception1_model(input_shape=[INPUT_SIZE[0], INPUT_SIZE[1], INPUT_SIZE[2]], 
                          filters_5x5=128,
                          filters_pool_proj=128,
                          name='inception_5a')
+    x = inception_module(x,
+                         filters_1x1=384,
+                         filters_3x3_reduce=192,
+                         filters_3x3=384,
+                         filters_5x5_reduce=48,
+                         filters_5x5=128,
+                         filters_pool_proj=128,
+                         name='inception_5b')
     x = tf.keras.layers.GlobalAveragePooling2D(name='avg_pool_5_3x3_1')(x)
     x = tf.keras.layers.Dropout(0.4)(x)
     x = tf.keras.layers.Dense(num_classes, activation='softmax', name='output')(x)
@@ -129,3 +188,6 @@ def inception1_model(input_shape=[INPUT_SIZE[0], INPUT_SIZE[1], INPUT_SIZE[2]], 
 if __name__ == "__main__":
     model = inception1_model()
     model.summary(expand_nested=True)
+    
+    tf.keras.utils.plot_model(
+        model, to_file=inception1_model.__name__+'.png', show_shapes=True)

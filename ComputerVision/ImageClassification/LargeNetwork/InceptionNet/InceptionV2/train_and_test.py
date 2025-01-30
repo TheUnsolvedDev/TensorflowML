@@ -13,7 +13,7 @@ def main():
     parser.add_argument('--gpu', type=int, default=0,
                         help='GPU number')
     parser.add_argument('--type', type=str, default='cifar10',
-                        help='Dataset type', choices=['cifar10', 'fashion_mnist', 'mnist', 'cifar100'])
+                        help='Dataset type', choices=['cifar10', 'fashion_mnist', 'mnist', 'cifar100', 'skin_cancer'])
     args = parser.parse_args()
     physical_devices = tf.config.experimental.list_physical_devices('GPU')
     if int(args.gpu) != -1:

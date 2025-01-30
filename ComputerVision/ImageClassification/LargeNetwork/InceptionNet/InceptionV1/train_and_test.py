@@ -13,7 +13,7 @@ def main():
     parser.add_argument('--gpu', type=int, default=0,
                         help='GPU number')
     parser.add_argument('--type', type=str, default='cifar10',
-                        help='Dataset type', choices=['cifar10', 'fashion_mnist', 'mnist', 'cifar100'])
+                        help='Dataset type', choices=['cifar10', 'fashion_mnist', 'mnist', 'cifar100', 'skin_cancer'])
     args = parser.parse_args()
     physical_devices = tf.config.experimental.list_physical_devices('GPU')
     if int(args.gpu) != -1:
@@ -35,7 +35,7 @@ def main():
         args.type)
     strategy = tf.distribute.MirroredStrategy()
     print('Number of devices: {}'.format(strategy.num_replicas_in_sync))
-
+    
     with strategy.scope():
         model = inception1_model(input_shape=(
             INPUT_SIZE[0], INPUT_SIZE[1], channels), num_classes=num_classes)
@@ -43,7 +43,7 @@ def main():
             optimizer=tf.keras.optimizers.Adam(
                 learning_rate=LEARNING_RATE),
             loss='categorical_crossentropy',
-            metrics=['accuracy']
+            metrics=['accuracy','accuracy','accuracy']
         )
     model.summary(expand_nested=True)
     tf.keras.utils.plot_model(
