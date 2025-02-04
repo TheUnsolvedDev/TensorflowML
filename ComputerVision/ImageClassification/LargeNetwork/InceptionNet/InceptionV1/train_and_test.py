@@ -16,6 +16,8 @@ def main():
                         help='Dataset type', choices=['cifar10', 'fashion_mnist', 'mnist', 'cifar100', 'skin_cancer'])
     args = parser.parse_args()
     physical_devices = tf.config.experimental.list_physical_devices('GPU')
+    for device in physical_devices:
+        tf.config.experimental.set_memory_growth(device, True)
     if int(args.gpu) != -1:
         tf.config.experimental.set_visible_devices(
             physical_devices[args.gpu], 'GPU')

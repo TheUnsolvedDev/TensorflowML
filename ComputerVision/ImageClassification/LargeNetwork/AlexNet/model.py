@@ -4,8 +4,6 @@ import numpy as np
 
 from config import *
 
-import tensorflow as tf
-
 class LocalResponseNormalization(tf.keras.layers.Layer):
     def __init__(self, alpha=0.0001, beta=0.75, depth_radius=5, **kwargs):
         super(LocalResponseNormalization, self).__init__(**kwargs)

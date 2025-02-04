@@ -1,4 +1,4 @@
-DATASET_PATH = '../../dataset/'
+DATASET_PATH = '../../../../dataset_clf/'
 INPUT_SIZE = [224, 224, 3]
 BATCH_SIZE = 64
 EPOCHS = 10

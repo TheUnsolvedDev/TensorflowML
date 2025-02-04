@@ -9,7 +9,7 @@ from model import *
 
 
 def main():
-    model_fn = lenet5_model
+    model_fn = resnet34_model
     parser = argparse.ArgumentParser(description='Select GPU[0-3]:')
     parser.add_argument('--gpu', type=int, default=0,
                         help='GPU number')
@@ -27,9 +27,9 @@ def main():
     callbacks = [
         tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=7),
         tf.keras.callbacks.ModelCheckpoint(
-            filepath=f'{model_fn.__name__}_' + args.type + '.weights.h5', save_weights_only=True, monitor='val_loss', save_best_only=True),
+            filepath=f'{model_fn.__name__}' + args.type + '.weights.h5', save_weights_only=True, monitor='val_loss', save_best_only=True),
         tf.keras.callbacks.TensorBoard(
-            log_dir=f'./logs_{args.type}_{model_fn.__name__}', histogram_freq=1, write_graph=True),
+            log_dir='./logs', histogram_freq=1, write_graph=True),
         tf.keras.callbacks.ReduceLROnPlateau(
             monitor='val_loss', factor=0.1, patience=4, verbose=1, mode='auto', min_delta=0.0001, cooldown=0, min_lr=0)
     ]
@@ -37,7 +37,7 @@ def main():
     train_ds, validation_ds, test_ds, num_classes, channels = dataset.load_data(
         args.type)
     strategy = tf.distribute.MirroredStrategy()
-    print(f'Training on dataset {args.type} with {strategy.num_replicas_in_sync} devices')
+    print('Number of devices: {}'.format(strategy.num_replicas_in_sync))
 
     with strategy.scope():
         model = model_fn(input_shape=(

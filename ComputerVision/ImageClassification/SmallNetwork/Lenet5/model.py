@@ -4,7 +4,7 @@ import numpy as np
 
 from config import *
 
-def model_function(input_shape=[INPUT_SIZE[0], INPUT_SIZE[1], INPUT_SIZE[2]], num_classes=10):
+def lenet5_model(input_shape=[INPUT_SIZE[0], INPUT_SIZE[1], INPUT_SIZE[2]], num_classes=10):
     inputs = tf.keras.layers.Input(shape=input_shape)
     x = tf.keras.layers.Lambda(lambda x: x/255.0)(inputs)
     x = tf.keras.layers.Conv2D(
@@ -24,5 +24,5 @@ def model_function(input_shape=[INPUT_SIZE[0], INPUT_SIZE[1], INPUT_SIZE[2]], nu
     return model_fn
 
 if __name__ == "__main__":
-    model = model()
+    model = lenet5_model()
     model.summary(expand_nested=True)
