@@ -9,7 +9,7 @@ from model import *
 
 
 def main():
-    model_fn = alexnet_model
+    model_fn = vgg16_D_model
     parser = argparse.ArgumentParser(description='Select GPU[0-3]:')
     parser.add_argument('--gpu', type=int, default=0,
                         help='GPU number')
@@ -50,7 +50,7 @@ def main():
         )
     model.summary(expand_nested=True)
     tf.keras.utils.plot_model(
-        model, to_file=model_fn.__name__+'.png')
+        model, to_file=model_fn.__name__+'.png',show_shapes=True, show_layer_names=True)
     model.fit(train_ds, validation_data=validation_ds,
               epochs=EPOCHS, callbacks=callbacks)
     model.evaluate(test_ds)
