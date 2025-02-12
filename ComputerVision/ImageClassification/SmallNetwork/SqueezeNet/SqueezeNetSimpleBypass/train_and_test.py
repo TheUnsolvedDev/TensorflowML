@@ -9,7 +9,7 @@ from model import *
 
 
 def main():
-    model_fn = lenet5_model
+    model_fn = squeezenet_simplebypass_model
     parser = argparse.ArgumentParser(description='Select GPU[0-3]:')
     parser.add_argument('--gpu', type=int, default=0,
                         help='GPU number')
