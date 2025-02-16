@@ -9,7 +9,7 @@ from model import *
 
 
 def main():
-    model_fn = alexnet_model
+    model_fn = inception1_model
     parser = argparse.ArgumentParser(description='Select GPU[0-3]:')
     parser.add_argument('--gpu', type=int, default=0,
                         help='GPU number')
@@ -46,7 +46,7 @@ def main():
             optimizer=tf.keras.optimizers.Adam(
                 learning_rate=LEARNING_RATE),
             loss='categorical_crossentropy',
-            metrics=['accuracy']
+            metrics=['accuracy','accuracy','accuracy']
         )
     model.summary(expand_nested=True)
     tf.keras.utils.plot_model(

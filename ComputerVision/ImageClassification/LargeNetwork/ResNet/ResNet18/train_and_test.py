@@ -9,6 +9,7 @@ from model import *
 
 
 def main():
+    model_fn = resnet18_model
     parser = argparse.ArgumentParser(description='Select GPU[0-3]:')
     parser.add_argument('--gpu', type=int, default=0,
                         help='GPU number')
@@ -26,9 +27,9 @@ def main():
     callbacks = [
         tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=7),
         tf.keras.callbacks.ModelCheckpoint(
-            filepath='model_resnet18_' + args.type + '.weights.h5', save_weights_only=True, monitor='val_loss', save_best_only=True),
+            filepath=f'{model_fn.__name__}_' + args.type + '.weights.h5', save_weights_only=True, monitor='val_loss', save_best_only=True),
         tf.keras.callbacks.TensorBoard(
-            log_dir='./logs', histogram_freq=1, write_graph=True),
+            log_dir=f'./logs_{args.type}_{model_fn.__name__}', histogram_freq=1, write_graph=True),
         tf.keras.callbacks.ReduceLROnPlateau(
             monitor='val_loss', factor=0.1, patience=4, verbose=1, mode='auto', min_delta=0.0001, cooldown=0, min_lr=0)
     ]
@@ -36,10 +37,10 @@ def main():
     train_ds, validation_ds, test_ds, num_classes, channels = dataset.load_data(
         args.type)
     strategy = tf.distribute.MirroredStrategy()
-    print('Number of devices: {}'.format(strategy.num_replicas_in_sync))
+    print(f'Training on dataset {args.type} with {strategy.num_replicas_in_sync} devices')
 
     with strategy.scope():
-        model = resnet18_model(input_shape=(
+        model = model_fn(input_shape=(
             INPUT_SIZE[0], INPUT_SIZE[1], channels), num_classes=num_classes)
         model.compile(
             optimizer=tf.keras.optimizers.Adam(
@@ -49,7 +50,7 @@ def main():
         )
     model.summary(expand_nested=True)
     tf.keras.utils.plot_model(
-        model, to_file=resnet18_model.__name__+'.png')
+        model, to_file=model_fn.__name__+'.png',show_shapes=True, show_layer_names=True)
     model.fit(train_ds, validation_data=validation_ds,
               epochs=EPOCHS, callbacks=callbacks)
     model.evaluate(test_ds)

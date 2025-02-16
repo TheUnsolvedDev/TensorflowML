@@ -61,7 +61,7 @@ class Dataset:
         if decode:
             image = tf.io.read_file(image)
             image = tf.image.decode_jpeg(image, channels=3)
-        image = tf.image.per_image_standardization(image)
+        # image = tf.image.per_image_standardization(image)
         image = tf.image.resize(image, self.img_shape)
         return image, label
 
@@ -183,7 +183,6 @@ if __name__ == "__main__":
         train_ds, validation_ds, test_ds, num_classes, channels = dataset.load_data(
             type)
         for image, label in validation_ds.take(1):
-            print(image.shape)
-            print(label.shape)
+            print(image, label)
             break
     # dataset = SkinCancerDataset()
