@@ -1,114 +1,102 @@
 import tensorflow as tf
-from tensorflow import keras
-from tensorflow.keras import layers
 
-# Define the Generator as a functional model
-def build_generator(latent_dim):
-    inputs = keras.Input(shape=(latent_dim,))
-    x = layers.Dense(128, activation='relu')(inputs)
-    x = layers.Dense(256, activation='relu')(x)
-    x = layers.Dense(512, activation='relu')(x)
-    outputs = layers.Dense(28 * 28 * 1, activation='tanh')(x)
-    outputs = layers.Reshape((28, 28, 1))(outputs)
-    return keras.Model(inputs, outputs, name="Generator")
-
-# Define the Discriminator as a functional model
-def build_discriminator():
-    inputs = keras.Input(shape=(28, 28, 1))
-    x = layers.Flatten()(inputs)
-    x = layers.Dense(512, activation='relu')(x)
-    x = layers.Dense(256, activation='relu')(x)
-    x = layers.Dense(128, activation='relu')(x)
-    outputs = layers.Dense(1, activation='sigmoid')(x)
-    return keras.Model(inputs, outputs, name="Discriminator")
-
-# Define the GAN model as a subclassed keras.Model
-class GAN(keras.Model):
-    def __init__(self, generator, discriminator, latent_dim):
+class GAN(tf.keras.Model):
+    def __init__(self, latent_dim):
         super(GAN, self).__init__()
-        self.generator = generator
-        self.discriminator = discriminator
         self.latent_dim = latent_dim
+        self.generator = self.build_generator()
+        self.discriminator = self.build_discriminator()
 
-    def compile(self, gen_optimizer, disc_optimizer, loss_fn):
+    def build_generator(self):
+        model = tf.keras.Sequential([
+            tf.keras.layers.Dense(256, input_shape=(self.latent_dim,), use_bias=False),
+            tf.keras.layers.BatchNormalization(),
+            tf.keras.layers.LeakyReLU(alpha=0.2),
+            tf.keras.layers.Dense(512, use_bias=False),
+            tf.keras.layers.BatchNormalization(),
+            tf.keras.layers.LeakyReLU(alpha=0.2),
+            tf.keras.layers.Dense(1024, use_bias=False),
+            tf.keras.layers.BatchNormalization(),
+            tf.keras.layers.LeakyReLU(alpha=0.2),
+            tf.keras.layers.Dense(28 * 28 * 1, use_bias=False, activation='tanh'),
+            tf.keras.layers.Reshape((28, 28, 1))
+        ])
+        return model
+
+    def build_discriminator(self):
+        model = tf.keras.Sequential([
+            tf.keras.layers.Flatten(input_shape=(28, 28, 1)),
+            tf.keras.layers.Dense(512),
+            tf.keras.layers.LeakyReLU(alpha=0.2),
+            tf.keras.layers.Dense(256),
+            tf.keras.layers.LeakyReLU(alpha=0.2),
+            tf.keras.layers.Dense(1)
+        ])
+        return model
+
+    def compile(self, d_optimizer, g_optimizer, loss_fn):
         super(GAN, self).compile()
-        self.gen_optimizer = gen_optimizer
-        self.disc_optimizer = disc_optimizer
+        self.d_optimizer = d_optimizer
+        self.g_optimizer = g_optimizer
         self.loss_fn = loss_fn
 
-    def call(self, inputs, training=False):
-        if not isinstance(inputs, tf.Tensor):
-            raise TypeError("GAN input must be a Tensor.")
-        if inputs.shape[-1] != self.latent_dim:
-            raise ValueError(f"Expected input shape (*, {self.latent_dim}), but got {inputs.shape}")
-        return self.generator(inputs, training=training)
-
+    @tf.function
     def train_step(self, real_images):
         batch_size = tf.shape(real_images)[0]
-        random_latent_vectors = tf.random.normal(shape=(batch_size, self.latent_dim))
-        
-        # Generate fake images
-        fake_images = self.generator(random_latent_vectors, training=True)
-        
-        # Train discriminator
-        with tf.GradientTape() as tape:
-            real_preds = self.discriminator(real_images, training=True)
-            fake_preds = self.discriminator(fake_images, training=True)
-            real_loss = self.loss_fn(tf.ones_like(real_preds), real_preds)
-            fake_loss = self.loss_fn(tf.zeros_like(fake_preds), fake_preds)
-            disc_loss = (real_loss + fake_loss) / 2
-        grads = tape.gradient(disc_loss, self.discriminator.trainable_variables)
-        self.disc_optimizer.apply_gradients(zip(grads, self.discriminator.trainable_variables))
-        
-        # Train generator
-        with tf.GradientTape() as tape:
-            generated_images = self.generator(random_latent_vectors, training=True)
-            fake_preds = self.discriminator(generated_images, training=True)
-            gen_loss = self.loss_fn(tf.ones_like(fake_preds), fake_preds)
-        grads = tape.gradient(gen_loss, self.generator.trainable_variables)
-        self.gen_optimizer.apply_gradients(zip(grads, self.generator.trainable_variables))
-        
-        return {"disc_loss": disc_loss, "gen_loss": gen_loss}
+        noise = tf.random.normal([batch_size, self.latent_dim])
 
-# Enable multi-GPU training
+        with tf.GradientTape() as gen_tape, tf.GradientTape() as disc_tape:
+            generated_images = self.generator(noise, training=True)
+
+            real_output = self.discriminator(real_images, training=True)
+            fake_output = self.discriminator(generated_images, training=True)
+
+            gen_loss = self.generator_loss(fake_output)
+            disc_loss = self.discriminator_loss(real_output, fake_output)
+
+        gradients_of_generator = gen_tape.gradient(gen_loss, self.generator.trainable_variables)
+        gradients_of_discriminator = disc_tape.gradient(disc_loss, self.discriminator.trainable_variables)
+
+        self.g_optimizer.apply_gradients(zip(gradients_of_generator, self.generator.trainable_variables))
+        self.d_optimizer.apply_gradients(zip(gradients_of_discriminator, self.discriminator.trainable_variables))
+
+        return {"d_loss": disc_loss, "g_loss": gen_loss}
+
+    def generator_loss(self, fake_output):
+        return self.loss_fn(tf.ones_like(fake_output), fake_output)
+
+    def discriminator_loss(self, real_output, fake_output):
+        real_loss = self.loss_fn(tf.ones_like(real_output), real_output)
+        fake_loss = self.loss_fn(tf.zeros_like(fake_output), fake_output)
+        total_loss = real_loss + fake_loss
+        return total_loss
+
+# Training code
+BATCH_SIZE = 256
+EPOCHS = 50
+LATENT_DIM = 100
+
+# Set up multi-GPU strategy
 strategy = tf.distribute.MirroredStrategy()
+print(f"Number of devices: {strategy.num_replicas_in_sync}")
+
+# Adjust batch size for multi-GPU setup
+GLOBAL_BATCH_SIZE = BATCH_SIZE * strategy.num_replicas_in_sync
+
+# Load and preprocess the MNIST dataset
+(train_images, _), (_, _) = tf.keras.datasets.mnist.load_data()
+train_images = train_images.reshape(train_images.shape[0], 28, 28, 1).astype('float32')
+train_images = (train_images - 127.5) / 127.5
+train_dataset = tf.data.Dataset.from_tensor_slices(train_images).shuffle(60000).batch(GLOBAL_BATCH_SIZE)
+
+# Create and compile the GAN within the strategy scope
 with strategy.scope():
-    latent_dim = 100
-    generator = build_generator(latent_dim)
-    discriminator = build_discriminator()
-    gan = GAN(generator, discriminator, latent_dim)
+    gan = GAN(latent_dim=LATENT_DIM)
     gan.compile(
-        gen_optimizer=keras.optimizers.Adam(learning_rate=0.0002, beta_1=0.5),
-        disc_optimizer=keras.optimizers.Adam(learning_rate=0.0002, beta_1=0.5),
-        loss_fn=keras.losses.BinaryCrossentropy()
+        d_optimizer=tf.keras.optimizers.Adam(learning_rate=0.0002, beta_1=0.5),
+        g_optimizer=tf.keras.optimizers.Adam(learning_rate=0.0002, beta_1=0.5),
+        loss_fn=tf.keras.losses.BinaryCrossentropy(from_logits=True)
     )
 
-# Prepare dataset
-def preprocess(image):
-    image = tf.image.convert_image_dtype(image, tf.float32)
-    image = (image - 0.5) * 2  # Normalize to [-1, 1]
-    return image
-
-dataset = tf.keras.datasets.mnist.load_data()
-(train_images, _), (_, _) = dataset
-train_images = train_images[..., None].astype("float32")
-
-batch_size = 128
-dataset = (tf.data.Dataset.from_tensor_slices(train_images)
-           .map(lambda x: preprocess(x), num_parallel_calls=tf.data.AUTOTUNE)
-           .shuffle(10000)
-           .batch(batch_size)
-           .prefetch(tf.data.AUTOTUNE))
-
-# Ensure model is built before training
-gan.generator.build(input_shape=(None, 100))
-gan.discriminator.build(input_shape=(None, 28, 28, 1))
-gan.build(input_shape=(None, 100))
-
-
-# Train model with callbacks
-callbacks = [
-    keras.callbacks.ModelCheckpoint("gan_model.keras", save_best_only=True)
-]
-
-gan.fit(dataset, epochs=50, callbacks=callbacks)
+# Train the GAN
+gan.fit(train_dataset, epochs=EPOCHS)

@@ -21,7 +21,6 @@ class Dataset:
     def process_images(self, image):
         # image = tf.image.per_image_standardization(image)
         image = tf.image.resize(image, self.img_shape)
-        image = tf.cast(image,tf.int32)
         return image
 
     def load_data(self, type='mnist'):
