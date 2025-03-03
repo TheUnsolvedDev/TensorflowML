@@ -5,41 +5,26 @@ import pyfiglet
 
 
 base_location = os.getcwd()
-def run_shell_files(files):
+def run_shell_files(files): # 'AlexNet','DenseNet121','DenseNet169'
+    files_to_run = ['DenseNet201','DenseNet264','InceptionV1','ResNet18','ResNet34','VGG11','VGG11_LRN','VGG13','VGG16C','VGG16D','VGG19']
     for file in files:
-        print(file)
         if file.find('run_all') != -1:
             continue
         try:
             os.chdir(base_location+os.path.dirname(file).replace('.',''))
-            print()
-            pyfiglet.print_figlet('{}'.format(file.split('/')[1]))
-            print('Currently running {}'.format(file))
-            print()
-            for i in ['mnist','cifar10','cifar100','fashion_mnist']:
-                os.system('python3 {} --type {} --gpu 0'.format(os.path.basename(file),i))
+            # print()
+            file_name = file.split('/')[-2]
+            if file_name not in files_to_run:
+                continue
+            pyfiglet.print_figlet('{}'.format(file_name), font='digital')
+            # print('Currently running {}'.format(file))
+            # print()
+            # for i in ['mnist','cifar10','cifar100','fashion_mnist']:
+            #     print('python3 {} --type {} --gpu 0'.format(os.path.basename(file),i))
+            os.system('bash run.sh')
             # os.system('sleep 10')
         finally:
             os.chdir(base_location)
-
-
-def main_threaded():
-    device_count = len(tf.config.experimental.list_physical_devices('GPU'))
-    not_files = 'run_all.py'
-    files = sorted([file for file in find_python_files()
-                   if file.find(not_files) == -1])
-    dividings = [[] for _ in range(device_count)]
-    for i, file in enumerate(files):
-        dividings[i % device_count].append(file)
-
-    threads = [threading.Thread(target=run_python_files, args=(
-        dividings[i], i)) for i in range(device_count)]
-
-    for thread in threads:
-        thread.start()
-
-    for thread in threads:
-        thread.join()
 
 
 def find_files(root_dir='./',type='train_and_test.py'):

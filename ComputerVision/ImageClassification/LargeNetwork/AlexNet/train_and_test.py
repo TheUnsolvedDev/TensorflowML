@@ -7,6 +7,7 @@ from config import *
 from dataset import *
 from model import *
 
+# tf.debugging.enable_check_numerics()
 
 def main():
     model_fn = alexnet_model
@@ -14,7 +15,8 @@ def main():
     parser.add_argument('--gpu', type=int, default=0,
                         help='GPU number')
     parser.add_argument('--type', type=str, default='cifar10',
-                        help='Dataset type', choices=['cifar10', 'fashion_mnist', 'mnist', 'cifar100','skin_cancer'])
+                        help='Dataset type', choices=['cifar10', 'fashion_mnist',
+                           'mnist',  'cifar100', 'skin_cancer', 'cassava_leaf_disease', 'chest_xray', 'crop_disease'])
     args = parser.parse_args()
     physical_devices = tf.config.experimental.list_physical_devices('GPU')
     for device in physical_devices:
@@ -26,8 +28,8 @@ def main():
     dataset = Dataset()
     callbacks = [
         tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=7),
-        tf.keras.callbacks.ModelCheckpoint(
-            filepath=f'{model_fn.__name__}_' + args.type + '.weights.h5', save_weights_only=True, monitor='val_loss', save_best_only=True),
+        # tf.keras.callbacks.ModelCheckpoint(
+        #     filepath=f'{model_fn.__name__}_' + args.type + '.weights.h5', save_weights_only=True, monitor='val_loss', save_best_only=True),
         tf.keras.callbacks.TensorBoard(
             log_dir=f'./logs_{args.type}_{model_fn.__name__}', histogram_freq=1, write_graph=True),
         tf.keras.callbacks.ReduceLROnPlateau(

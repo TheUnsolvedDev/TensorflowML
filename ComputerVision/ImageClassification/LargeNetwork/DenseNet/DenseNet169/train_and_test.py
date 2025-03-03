@@ -9,7 +9,7 @@ from model import *
 
 
 def main():
-    model_fn = resnet34_model
+    model_fn = densenet_model_169
     parser = argparse.ArgumentParser(description='Select GPU[0-3]:')
     parser.add_argument('--gpu', type=int, default=0,
                         help='GPU number')
