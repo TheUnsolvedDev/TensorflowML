@@ -8,6 +8,7 @@ from config import *
 from model import *
 from dataset import *
 
+
 def setup_gpu(gpu_id):
     physical_devices = tf.config.list_physical_devices('GPU')
     for device in physical_devices:
@@ -21,27 +22,30 @@ def setup_gpu(gpu_id):
         print(f"Using GPU: {gpu_id}")
     else:
         print("Invalid GPU ID. Defaulting to CPU.")
+        
+
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Select GPU[0-3]:')
-    parser.add_argument('--gpu', type=int, default=0, help='GPU number')
-    parser.add_argument('--type', type=str, default='cifar10',
+    parser.add_argument('--gpu', type=int, default=-1, help='GPU number')
+    parser.add_argument('--type', type=str, default='mnist',
                         help='Dataset type', choices=['cifar10', 'fashion_mnist', 'mnist', 'cifar100'])
     args = parser.parse_args()
 
     # GPU Setup
     setup_gpu(args.gpu)
-    strategy = tf.distribute.MirroredStrategy()
+    strategy = tf.distribute.MirroredStrategy(
+        cross_device_ops=tf.distribute.NcclAllReduce())
     print(
         f'Training on dataset {args.type} with {strategy.num_replicas_in_sync} devices')
-    
-    dataset = Dataset()
+
+    dataset = Dataset(strategy=strategy, batch_size=BATCH_SIZE)
     train_ds, test_ds, channels = dataset.load_data(args.type)
-    train_ds = strategy.experimental_distribute_dataset(train_ds)
     
-    with strategy.scope():
-        gan = DeepNNGAN(strategy, gen_input_shape=(LATENT_DIM,), disc_input_shape=(IMAGE_SIZE[0], IMAGE_SIZE[1], channels))
-        gan.generator.summary()
-        gan.discriminator.summary()
-        
-        gan.fit(train_ds,epochs=EPOCHS)
+    gan = DeepNNGAN(strategy, gen_input_shape=(LATENT_DIM,),
+                    disc_input_shape=(IMAGE_SIZE[0], IMAGE_SIZE[1], channels))
+    gan.generator.summary()
+    gan.discriminator.summary()
+
+    gan.fit(train_ds, epochs=EPOCHS)

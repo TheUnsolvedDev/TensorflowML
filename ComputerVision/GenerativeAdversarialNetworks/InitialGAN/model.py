@@ -60,27 +60,30 @@ class DeepNNGAN:
         self.batch_per_replica = int(
             batch_size / strategy.num_replicas_in_sync)
 
-        self.generator = generator_model(
-            input_shape=self.gen_input_shape, output_shape=self.disc_input_shape)
-        self.discriminator = discriminator_model(self.disc_input_shape)
-        self.generator_optimizer = tf.keras.optimizers.Adam(
-            GENERATOR_LEARNING_RATE)
-        self.discriminator_optimizer = tf.keras.optimizers.Adam(
-            DISCRIMINATOR_LEARNING_RATE)
-        self.loss_fn = tf.keras.losses.BinaryCrossentropy(
-            reduction=tf.keras.losses.Reduction.NONE)
+        with self.strategy.scope():
+            self.generator = generator_model(
+                input_shape=self.gen_input_shape, output_shape=self.disc_input_shape)
+            self.discriminator = discriminator_model(self.disc_input_shape)
+            self.binary_crossentropy = tf.keras.losses.BinaryCrossentropy(
+                reduction=tf.keras.losses.Reduction.NONE)
+            self.generator_optimizer = tf.keras.optimizers.Adam(
+                GENERATOR_LEARNING_RATE)
+            self.discriminator_optimizer = tf.keras.optimizers.Adam(
+                DISCRIMINATOR_LEARNING_RATE)
 
     def generator_loss(self, fake_output):
-        loss = self.loss_fn(tf.ones_like(fake_output), fake_output)
-        return loss/self.batch_size
+        loss = self.binary_crossentropy(
+            tf.ones_like(fake_output), fake_output)
+        return loss
 
     def discriminator_loss(self, real_output, fake_output):
-        real_loss = self.loss_fn(tf.ones_like(real_output), real_output)
-        fake_loss = self.loss_fn(tf.zeros_like(fake_output), fake_output)
-        total_loss = (real_loss + fake_loss)/self.batch_size
+        real_loss = self.binary_crossentropy(
+            tf.ones_like(real_output), real_output)
+        fake_loss = self.binary_crossentropy(
+            tf.zeros_like(fake_output), fake_output)
+        total_loss = (real_loss + fake_loss)/(2)
         return total_loss
 
-    # @tf.function
     def train_step(self, real_images):
         batch_size = tf.shape(real_images)[0]
         noise = tf.random.normal([batch_size, self.gen_input_shape[0]])
@@ -98,22 +101,11 @@ class DeepNNGAN:
             gen_loss, self.generator.trainable_variables)
         gradients_of_discriminator = disc_tape.gradient(
             disc_loss, self.discriminator.trainable_variables)
-
         self.generator_optimizer.apply_gradients(
             zip(gradients_of_generator, self.generator.trainable_variables))
         self.discriminator_optimizer.apply_gradients(
             zip(gradients_of_discriminator, self.discriminator.trainable_variables))
-
-        with tf.GradientTape() as gen_tape:
-            generated_images = self.generator(noise, training=True)
-            fake_output = self.discriminator(generated_images, training=True)
-            gen_loss = self.generator_loss(fake_output)
-
-        gradients_of_generator = gen_tape.gradient(
-            gen_loss, self.generator.trainable_variables)
-        self.generator_optimizer.apply_gradients(
-            zip(gradients_of_generator, self.generator.trainable_variables))
-
+        
         return {"d_loss": disc_loss, "g_loss": gen_loss}
 
     @tf.function
@@ -122,11 +114,11 @@ class DeepNNGAN:
             self.train_step, args=(dataset,))
         replica_gen_loss = per_replica_losses['g_loss']
         replica_disc_loss = per_replica_losses['d_loss']
-
+        
         total_g_loss = self.strategy.reduce(
-            "sum", replica_gen_loss, axis=0)
+            tf.distribute.ReduceOp.MEAN, replica_gen_loss, axis=0)
         total_d_loss = self.strategy.reduce(
-            "sum", replica_disc_loss, axis=0)
+            tf.distribute.ReduceOp.MEAN, replica_disc_loss, axis=0)
         return {"d_loss": total_d_loss, "g_loss": total_g_loss}
 
     def fit(self, train_dataset, epochs=100, callbacks=None):
@@ -135,9 +127,8 @@ class DeepNNGAN:
                 loss = self.distributed_train_step(images)
                 print(
                     f'Epoch: {_+1}, Discriminator Loss: {loss["d_loss"]:.4f}, Generator Loss: {loss["g_loss"]:.4f}')
+                # input()
         print('Training complete')
-        
-
 
 
 if __name__ == '__main__':

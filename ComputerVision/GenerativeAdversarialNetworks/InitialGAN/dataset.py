@@ -8,20 +8,21 @@ from config import *
 
 
 class Dataset:
-    def __init__(self):
+    def __init__(self, strategy, batch_size=BATCH_SIZE, img_shape=IMAGE_SIZE):
         self.mnist = tf.keras.datasets.mnist.load_data()
         self.cifar10 = tf.keras.datasets.cifar10.load_data()
         self.fashion_mnist = tf.keras.datasets.fashion_mnist.load_data()
         self.cifar100 = tf.keras.datasets.cifar100.load_data()
         self.data_types = ['cifar10', 'fashion_mnist',
                            'mnist',  'cifar100']
-        self.batch_size = BATCH_SIZE
-        self.img_shape = IMAGE_SIZE
+        self.strategy = strategy
+        self.batch_size = batch_size*strategy.num_replicas_in_sync
+        self.img_shape = img_shape
 
     def process_images(self, image):
         # image = tf.image.per_image_standardization(image)
         image = tf.image.resize(image, self.img_shape)
-        image = tf.cast(image,tf.int32)
+        image = tf.cast(image, tf.int32)
         return image
 
     def load_data(self, type='mnist'):
@@ -31,10 +32,11 @@ class Dataset:
             train_images, test_images = train_images.reshape(
                 -1, 28, 28, 1), test_images.reshape(-1, 28, 28, 1)
             train_ds = tf.data.Dataset.from_tensor_slices(
-                (train_images)).shuffle(10000).batch(self.batch_size).map(self.process_images).prefetch(tf.data.AUTOTUNE)
+                (train_images)).shuffle(10000).batch(self.batch_size, drop_remainder=True).map(self.process_images).prefetch(tf.data.AUTOTUNE)
             test_ds = tf.data.Dataset.from_tensor_slices(
-                (test_images)).batch(self.batch_size).map(self.process_images).prefetch(tf.data.AUTOTUNE)
-
+                (test_images)).batch(self.batch_size, drop_remainder=True).map(self.process_images).prefetch(tf.data.AUTOTUNE)
+            train_ds = self.strategy.experimental_distribute_dataset(train_ds)
+            test_ds = self.strategy.experimental_distribute_dataset(test_ds)
             return train_ds, test_ds, self.channels
 
         elif type == 'cifar10':
@@ -43,10 +45,11 @@ class Dataset:
             train_images, test_images = train_images.reshape(
                 -1, 32, 32, 3), test_images.reshape(-1, 32, 32, 3)
             train_ds = tf.data.Dataset.from_tensor_slices(
-                (train_images)).shuffle(10000).batch(self.batch_size).map(self.process_images).prefetch(tf.data.AUTOTUNE)
+                (train_images)).shuffle(10000).batch(self.batch_size, drop_remainder=True).map(self.process_images).prefetch(tf.data.AUTOTUNE)
             test_ds = tf.data.Dataset.from_tensor_slices(
-                (test_images)).batch(self.batch_size).map(self.process_images).prefetch(tf.data.AUTOTUNE)
-
+                (test_images)).batch(self.batch_size, drop_remainder=True).map(self.process_images).prefetch(tf.data.AUTOTUNE)
+            train_ds = self.strategy.experimental_distribute_dataset(train_ds)
+            test_ds = self.strategy.experimental_distribute_dataset(test_ds)
             return train_ds, test_ds, self.channels
 
         elif type == 'fashion_mnist':
@@ -58,10 +61,11 @@ class Dataset:
                 -1, 28, 28, 1), test_images.reshape(-1, 28, 28, 1)
 
             train_ds = tf.data.Dataset.from_tensor_slices(
-                (train_images)).shuffle(10000).batch(self.batch_size).map(self.process_images).prefetch(tf.data.AUTOTUNE)
+                (train_images)).shuffle(10000).batch(self.batch_size, drop_remainder=True).map(self.process_images).prefetch(tf.data.AUTOTUNE)
             test_ds = tf.data.Dataset.from_tensor_slices(
-                (test_images)).batch(self.batch_size).map(self.process_images).prefetch(tf.data.AUTOTUNE)
-
+                (test_images)).batch(self.batch_size, drop_remainder=True).map(self.process_images).prefetch(tf.data.AUTOTUNE)
+            train_ds = self.strategy.experimental_distribute_dataset(train_ds)
+            test_ds = self.strategy.experimental_distribute_dataset(test_ds)
             return train_ds, test_ds, self.channels
 
         elif type == 'cifar100':
@@ -70,19 +74,22 @@ class Dataset:
             train_images, test_images = train_images.reshape(
                 -1, 32, 32, 3), test_images.reshape(-1, 32, 32, 3)
             train_ds = tf.data.Dataset.from_tensor_slices(
-                (train_images)).shuffle(10000).batch(self.batch_size).map(self.process_images).prefetch(tf.data.AUTOTUNE)
+                (train_images)).shuffle(10000).batch(self.batch_size, drop_remainder=True).map(self.process_images).prefetch(tf.data.AUTOTUNE)
             test_ds = tf.data.Dataset.from_tensor_slices(
-                (test_images)).batch(self.batch_size).map(self.process_images).prefetch(tf.data.AUTOTUNE)
-
+                (test_images)).batch(self.batch_size, drop_remainder=True).map(self.process_images).prefetch(tf.data.AUTOTUNE)
+            train_ds = self.strategy.experimental_distribute_dataset(train_ds)
+            test_ds = self.strategy.experimental_distribute_dataset(test_ds)
             return train_ds, test_ds, self.channels
 
 
 if __name__ == "__main__":
-    dataset = Dataset()
+    strategy = tf.distribute.MirroredStrategy()
+    print("Number of devices: ", strategy.num_replicas_in_sync)
+    dataset = Dataset(strategy=strategy)
     for type in dataset.data_types:
         train_ds, test_ds,  channels = dataset.load_data(
             type)
-        for image in train_ds.take(1):
-            print(image.shape)
+        for image in train_ds:
+            print(image)
             break
     # dataset = SkinCancerDataset()

@@ -50,8 +50,8 @@ def main():
             metrics=['accuracy']
         )
     model.summary(expand_nested=True)
-    tf.keras.utils.plot_model(
-        model, to_file=model_fn.__name__+'.png',show_shapes=True, show_layer_names=True)
+    # tf.keras.utils.plot_model(
+    #     model, to_file=model_fn.__name__+'.svg',show_shapes=True, show_layer_names=True)
     model.fit(train_ds, validation_data=validation_ds,
               epochs=EPOCHS, callbacks=callbacks)
     model.evaluate(test_ds)
