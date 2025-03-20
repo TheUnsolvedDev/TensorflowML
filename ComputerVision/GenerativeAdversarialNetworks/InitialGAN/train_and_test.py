@@ -24,8 +24,6 @@ def setup_gpu(gpu_id):
         print("Invalid GPU ID. Defaulting to CPU.")
         
 
-
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Select GPU[0-3]:')
     parser.add_argument('--gpu', type=int, default=-1, help='GPU number')
