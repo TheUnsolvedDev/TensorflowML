@@ -1,0 +1,5 @@
+DATASET_PATH = '../../../../dataset_clf/'
+INPUT_SIZE = [64, 64, 3]
+BATCH_SIZE = 256
+EPOCHS = 10
+LEARNING_RATE = 0.001

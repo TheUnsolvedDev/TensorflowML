@@ -26,8 +26,8 @@ def generator_model(input_shape=(LATENT_DIM,), output_shape=(IMAGE_SIZE[0], IMAG
 
     x = tf.keras.layers.Dense(np.prod(output_shape),
                               use_bias=False, activation='sigmoid')(x)
-    outputs = tf.keras.layers.Reshape(output_shape)(x)
-    # outputs = tf.keras.layers.Lambda(lambda x: x*255.0)(x)
+    x = tf.keras.layers.Reshape(output_shape)(x)
+    outputs = tf.keras.layers.Lambda(lambda x: x*255.0)(x)
 
     model = tf.keras.Model(inputs=inputs, outputs=outputs, name='generator')
     return model
@@ -36,7 +36,7 @@ def generator_model(input_shape=(LATENT_DIM,), output_shape=(IMAGE_SIZE[0], IMAG
 def discriminator_model(input_shape=(IMAGE_SIZE[0], IMAGE_SIZE[1], 3)):
     inputs = tf.keras.layers.Input(shape=input_shape)
     x = tf.keras.layers.Flatten()(inputs)
-    # x = tf.keras.layers.Lambda(lambda x: x/255.0)(x)
+    x = tf.keras.layers.Lambda(lambda x: x/255.0)(x)
 
     x = tf.keras.layers.Dense(128, use_bias=False)(x)
     x = tf.keras.layers.LeakyReLU(alpha=0.2)(x)
@@ -87,6 +87,7 @@ class DeepNNGAN:
         def generator_loss(fake_output):
             loss = self.binary_crossentropy(
                 tf.ones_like(fake_output), fake_output)
+            loss = tf.nn.compute_average_loss(loss, global_batch_size=self.batch_size*self.strategy.num_replicas_in_sync)
             return loss
 
         def discriminator_loss(real_output, fake_output):
@@ -95,6 +96,7 @@ class DeepNNGAN:
             fake_loss = self.binary_crossentropy(
                 tf.zeros_like(fake_output), fake_output)
             total_loss = (real_loss + fake_loss)
+            total_loss = tf.nn.compute_average_loss(total_loss, global_batch_size=self.batch_size*self.strategy.num_replicas_in_sync)
             return total_loss
         return generator_loss, discriminator_loss
 
@@ -131,9 +133,9 @@ class DeepNNGAN:
         replica_disc_loss = per_replica_losses['d_loss']
         
         total_g_loss = self.strategy.reduce(
-            tf.distribute.ReduceOp.MEAN, replica_gen_loss, axis=0)
+            tf.distribute.ReduceOp.MEAN, replica_gen_loss, axis=None)
         total_d_loss = self.strategy.reduce(
-            tf.distribute.ReduceOp.MEAN, replica_disc_loss, axis=0)
+            tf.distribute.ReduceOp.MEAN, replica_disc_loss, axis=None)
         return {"d_loss": total_d_loss, "g_loss": total_g_loss}
 
     def fit(self, train_dataset, epochs=100, callbacks=None):

@@ -29,8 +29,8 @@ class Dataset:
         if type == 'mnist':
             self.channels = 1
             (train_images, train_labels), (test_images, test_labels) = self.mnist
-            train_images = train_images/255.0
-            test_images = test_images/255.0
+            # train_images = train_images/255.0
+            # test_images = test_images/255.0
             train_images, test_images = train_images.reshape(
                 -1, 28, 28, 1), test_images.reshape(-1, 28, 28, 1)
             train_ds = tf.data.Dataset.from_tensor_slices(

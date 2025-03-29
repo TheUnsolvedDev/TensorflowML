@@ -10,7 +10,7 @@ os.environ["TF_MIN_GPU_MULTIPROCESSOR_COUNT"] = "4"
 # `tf.distribute.MirroredStrategy` constructor, it will be auto-detected.
 # If you have *different* GPUs in your system, you probably have to set up cross_device_ops like this
 strategy = tf.distribute.MirroredStrategy(
-    cross_device_ops=tf.distribute.HierarchicalCopyAllReduce())
+    cross_device_ops=tf.distribute.NcclAllReduce())
 print('Number of devices: {}'.format(strategy.num_replicas_in_sync))
 
 # Get the data

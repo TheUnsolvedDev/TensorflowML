@@ -37,7 +37,7 @@ def main():
 
     train_ds, validation_ds, test_ds, num_classes, channels = dataset.load_data(
         args.type)
-    strategy = tf.distribute.MirroredStrategy()
+    strategy = tf.distribute.MirroredStrategy(cross_device_ops=tf.distribute.NcclAllReduce())
     print(f'Training on dataset {args.type} with {strategy.num_replicas_in_sync} devices')
 
     with strategy.scope():
