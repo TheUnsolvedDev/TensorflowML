@@ -1,97 +1,78 @@
 import tensorflow as tf
 
-class GroupConv2D(tf.keras.layers.Layer):
-    def __init__(self, filters, kernel_size, strides=1, groups=1):
-        super(GroupConv2D, self).__init__()
-        self.filters = filters
-        self.kernel_size = kernel_size
-        self.strides = strides
-        self.groups = groups
-        self.convs = []
-
-    def build(self, input_shape):
-        input_channels = input_shape[-1]
-        self.group_filters = self.filters // self.groups
-        for _ in range(self.groups):
-            self.convs.append(tf.keras.layers.Conv2D(self.group_filters, self.kernel_size, strides=self.strides, padding='same', activation=None, use_bias=False))
-
-    def call(self, x):
-        group_list = tf.split(x, num_or_size_splits=self.groups, axis=-1)
-        group_convs = [conv(group) for conv, group in zip(self.convs, group_list)]
-        return tf.keras.layers.Concatenate()(group_convs)
-
 class ChannelShuffle(tf.keras.layers.Layer):
-    def __init__(self, num_groups):
-        super(ChannelShuffle, self).__init__()
+    def __init__(self, num_groups, **kwargs):
+        super().__init__(**kwargs)
         self.num_groups = num_groups
 
-    def call(self, x):
-        if self.num_groups == 1:
-            return x
-        batch_size = tf.shape(x)[0]
-        height, width, channels = tf.shape(x)[1], tf.shape(x)[2], tf.shape(x)[3]
-        group_size = channels // self.num_groups
-        x = tf.reshape(x, [batch_size, height, width, self.num_groups, group_size])
-        x = tf.transpose(x, [0, 1, 2, 4, 3])
-        x = tf.reshape(x, [batch_size, height, width, channels])
-        return x
+    def call(self, inputs):
+        batch_size, height, width, channels = tf.unstack(tf.shape(inputs))
+        group_channels = channels // self.num_groups
+        inputs = tf.reshape(inputs, [batch_size, height, width, self.num_groups, group_channels])
+        inputs = tf.transpose(inputs, [0, 1, 2, 4, 3])
+        return tf.reshape(inputs, [batch_size, height, width, channels])
 
-
-class ShuffleNetV2Unit(tf.keras.layers.Layer):
-    def __init__(self, out_channels, stride):
-        super(ShuffleNetV2Unit, self).__init__()
+class ShuffleUnit(tf.keras.layers.Layer):
+    def __init__(self, out_channels, stride, groups, left_ratio, spatial_down, **kwargs):
+        super().__init__(**kwargs)
         self.out_channels = out_channels
         self.stride = stride
-        self.mid_channels = max(2, out_channels // 2)  # Ensure mid_channels is even
-        self.ensure_even_channels = tf.keras.layers.Conv2D(self.out_channels + (self.out_channels % 2), (1, 1), padding='same', use_bias=False)
+        self.groups = groups
+        self.left_ratio = left_ratio
+        self.spatial_down = spatial_down
+        self.depthwise = tf.keras.layers.DepthwiseConv2D(kernel_size=3, strides=self.stride, padding='same')
+        self.channel_shuffle = ChannelShuffle(self.groups)
 
-    def call(self, x):
-        x = self.ensure_even_channels(x)  # Ensure even number of channels
-        if self.stride == 1:
-            left, right = tf.split(x, num_or_size_splits=2, axis=-1)
-            right = tf.keras.layers.Conv2D(self.mid_channels, (1, 1), padding='same', use_bias=False)(right)
-            right = tf.keras.layers.BatchNormalization()(right)
-            right = tf.keras.layers.ReLU()(right)
-            right = tf.keras.layers.DepthwiseConv2D((3, 3), strides=1, padding='same', use_bias=False)(right)
-            right = tf.keras.layers.BatchNormalization()(right)
-            right = tf.keras.layers.Conv2D(self.mid_channels, (1, 1), padding='same', use_bias=False)(right)
-            right = tf.keras.layers.BatchNormalization()(right)
-            x = tf.keras.layers.Concatenate()([left, right])
+    def build(self, input_shape):
+        depth_in = input_shape[-1]
+        depth_left = int(depth_in * self.left_ratio)
+        depth_right = depth_in - depth_left
+
+        if self.spatial_down:
+            self.shortcut = tf.keras.Sequential([
+                tf.keras.layers.DepthwiseConv2D(kernel_size=3, strides=self.stride, padding='same'),
+                tf.keras.layers.Conv2D(self.out_channels, kernel_size=1, padding='same', activation=None)
+            ])
         else:
-            left = tf.keras.layers.DepthwiseConv2D((3, 3), strides=self.stride, padding='same', use_bias=False)(x)
-            left = tf.keras.layers.BatchNormalization()(left)
-            left = tf.keras.layers.Conv2D(self.mid_channels, (1, 1), padding='same', use_bias=False)(left)
-            left = tf.keras.layers.BatchNormalization()(left)
-            right = tf.keras.layers.Conv2D(self.mid_channels, (1, 1), padding='same', use_bias=False)(x)
-            right = tf.keras.layers.BatchNormalization()(right)
-            right = tf.keras.layers.ReLU()(right)
-            right = tf.keras.layers.DepthwiseConv2D((3, 3), strides=self.stride, padding='same', use_bias=False)(right)
-            right = tf.keras.layers.BatchNormalization()(right)
-            right = tf.keras.layers.Conv2D(self.mid_channels, (1, 1), padding='same', use_bias=False)(right)
-            right = tf.keras.layers.BatchNormalization()(right)
-            x = tf.keras.layers.Concatenate()([left, right])
-        return ChannelShuffle(2)(x)
+            self.shortcut = lambda x: x[:, :, :, :depth_left]
 
-def shufflenet_v2_model(input_shape=(224, 224, 3), num_classes=1000):
-    inputs = tf.keras.layers.Input(shape=input_shape)
-    x = tf.keras.layers.Conv2D(24, (3, 3), strides=2, padding='same', use_bias=False)(inputs)
-    x = tf.keras.layers.BatchNormalization()(x)
-    x = tf.keras.layers.ReLU()(x)
-    x = tf.keras.layers.MaxPooling2D(pool_size=(3, 3), strides=2, padding='same')(x)
+        self.residual_1x1 = tf.keras.layers.Conv2D(depth_right, kernel_size=1, padding='same', activation=None)
+        self.residual_depthwise = tf.keras.layers.DepthwiseConv2D(kernel_size=3, strides=self.stride, padding='same')
+        self.residual_1x1_out = tf.keras.layers.Conv2D(depth_right, kernel_size=1, padding='same', activation=None)
+
+    def call(self, inputs):
+        shortcut = self.shortcut(inputs)
+        residual = self.residual_1x1(inputs)
+        residual = self.residual_depthwise(residual)
+        residual = self.residual_1x1_out(residual)
+        output = tf.concat([shortcut, residual], axis=-1)
+        return self.channel_shuffle(output)
+
+
+def shufflenet_v2_model(input_shape, num_classes, depth_multiplier=1.0):
+    depths_dict = {0.5: (48, 96, 192, 1024),
+                   1.0: (116, 232, 464, 1024),
+                   1.5: (176, 352, 704, 1024),
+                   2.0: (244, 488, 976, 2048)}
+    depths = depths_dict[depth_multiplier]
     
-    for _ in range(4):
-        x = ShuffleNetV2Unit(116, 1)(x)
-    for _ in range(8):
-        x = ShuffleNetV2Unit(232, 2)(x)
-    for _ in range(4):
-        x = ShuffleNetV2Unit(464, 2)(x)
+    inputs = tf.keras.Input(shape=input_shape)
+    x = tf.keras.layers.Lambda(lambda x: x/255.0)(inputs)
+    x = tf.keras.layers.Conv2D(24, 3, strides=2, padding='same', activation='relu')(x)
+    x = tf.keras.layers.MaxPool2D(pool_size=3, strides=2, padding='same')(x)
     
+    for depth in depths[:-1]:
+        x = ShuffleUnit(depth, 2, 2, 0.5, True)(x)
+        for _ in range(3):
+            x = ShuffleUnit(depth, 1, 2, 0.5, False)(x)
+    
+    x = tf.keras.layers.Conv2D(depths[-1], 1, padding='same', activation='relu')(x)
     x = tf.keras.layers.GlobalAveragePooling2D()(x)
-    x = tf.keras.layers.Dense(num_classes, activation='softmax')(x)
+    if num_classes:
+        x = tf.keras.layers.Dense(num_classes, activation='softmax')(x)
     
-    return tf.keras.Model(inputs=inputs, outputs=x)
+    return tf.keras.Model(inputs, x)
 
 if __name__ == "__main__":
-    # Example usage
-    model = shufflenet_v2_model(input_shape=(224, 224, 3), num_classes=1000)
+    model = shufflenet_v2_model((224, 224, 3), 1000)
     model.summary()

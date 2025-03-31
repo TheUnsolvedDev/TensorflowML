@@ -15,7 +15,7 @@ def main():
                         help='GPU number')
     parser.add_argument('--type', type=str, default='cifar10',
                         help='Dataset type', choices=['cifar10', 'fashion_mnist',
-                           'mnist',  'cifar100', 'skin_cancer', 'cassava_leaf_disease', 'chest_xray', 'crop_disease'])
+                                                      'mnist',  'cifar100', 'skin_cancer', 'cassava_leaf_disease', 'chest_xray', 'crop_disease'])
     args = parser.parse_args()
     physical_devices = tf.config.experimental.list_physical_devices('GPU')
     for device in physical_devices:
@@ -37,8 +37,10 @@ def main():
 
     train_ds, validation_ds, test_ds, num_classes, channels = dataset.load_data(
         args.type)
-    strategy = tf.distribute.MirroredStrategy(cross_device_ops=tf.distribute.NcclAllReduce())
-    print(f'Training on dataset {args.type} with {strategy.num_replicas_in_sync} devices')
+    strategy = tf.distribute.MirroredStrategy(
+        cross_device_ops=tf.distribute.NcclAllReduce())
+    print(
+        f'Training on dataset {args.type} with {strategy.num_replicas_in_sync} devices')
 
     with strategy.scope():
         model = model_fn(input_shape=(
@@ -51,7 +53,7 @@ def main():
         )
     model.summary(expand_nested=True)
     tf.keras.utils.plot_model(
-        model, to_file=model_fn.__name__+'.png',show_shapes=True, show_layer_names=True)
+        model, to_file=model_fn.__name__+'.png', expand_nested=True, show_shapes=True, show_layer_names=True)
     model.fit(train_ds, validation_data=validation_ds,
               epochs=EPOCHS, callbacks=callbacks)
     model.evaluate(test_ds)
