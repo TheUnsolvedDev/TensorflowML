@@ -55,6 +55,25 @@ def test(environment, agent, num_steps=int(1e+4)):
             break
     return rewards_collected
 
+def running_average(rewards, num_steps=100):
+    avg_rewards = np.zeros(len(rewards))
+    for i in range(len(rewards)):
+        if i < num_steps:
+            avg_rewards[i] = np.mean(rewards[:i+1])
+        else:
+            avg_rewards[i] = np.mean(rewards[i-num_steps:i+1])
+    return avg_rewards
+
+def plot_rewards(avg_reward_collection):
+    plt.plot(avg_reward_collection)
+    plt.plot(running_average(avg_reward_collection, num_steps=100))
+    plt.title("Average Test Reward")
+    plt.xlabel("Training Steps")
+    plt.ylabel("Average Test Reward")
+    plt.grid()
+    plt.savefig('rewards/avg_test_reward.png')
+    plt.close()
+
 def session(num_steps=NUM_TRAINING_STEPS):
     env = Environment(num_envs=NUM_ENVS)
     test_env = Environment(num_envs=1)
@@ -98,4 +117,4 @@ def session(num_steps=NUM_TRAINING_STEPS):
     return avg_reward_collection
 
 if __name__ == "__main__":
-    session()
+    plot_rewards(session())
