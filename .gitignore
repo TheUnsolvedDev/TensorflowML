@@ -9,6 +9,8 @@
 *.txt
 *.json
 *.v2
+*.csv
+*.keras
 *.tfevents.*
 */checkpoints/*
 __pycache__/
@@ -25,3 +27,6 @@ GPU_tf/
 /ComputerVision/ObjectDetection/Yolo
 /ComputerVision/ImageClassification/LargeNetwork/dataset
 /ComputerVision/dataset_clf
+/NaturalLanguageProcessing/TextGeneration/EncoderDecoder/dataset.txt
+/NaturalLanguageProcessing/TextGeneration/GeneratedPretrainedTransformer/dataset.txt
+/NaturalLanguageProcessing/TextGeneration/Transformer/dataset.txt

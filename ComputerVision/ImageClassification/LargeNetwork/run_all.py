@@ -5,8 +5,8 @@ import pyfiglet
 
 
 base_location = os.getcwd()
-def run_shell_files(files): # 'AlexNet','DenseNet121','DenseNet169'
-    files_to_run = ['DenseNet201','DenseNet264','InceptionV1','ResNet18','ResNet34','VGG11','VGG11_LRN','VGG13','VGG16C','VGG16D','VGG19']
+def run_shell_files(files): # 'AlexNet','DenseNet121','DenseNet169', 'DenseNet201','DenseNet264','InceptionV1','ResNet18','ResNet34'
+    files_to_run = ['VGG11','VGG11_LRN','VGG13','VGG16C','VGG16D','VGG19']
     for file in files:
         if file.find('run_all') != -1:
             continue
@@ -22,7 +22,7 @@ def run_shell_files(files): # 'AlexNet','DenseNet121','DenseNet169'
             # for i in ['mnist','cifar10','cifar100','fashion_mnist']:
             #     print('python3 {} --type {} --gpu 0'.format(os.path.basename(file),i))
             os.system('bash run.sh')
-            # os.system('sleep 10')
+            os.system('sleep 10')
         finally:
             os.chdir(base_location)
 

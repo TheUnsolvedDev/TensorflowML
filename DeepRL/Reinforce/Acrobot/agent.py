@@ -38,9 +38,9 @@ class ReinforceAgent:
     
     @tf.function
     def learn(self, states, actions, returns):
-        with tf.GradientTape(persistent=True) as tape:
-            logits = self.model(states)  # (batch_size, num_actions)
-            action_probs = tf.reduce_sum(logits * tf.one_hot(actions, self.output_shape[0]), axis=1)
+        with tf.GradientTape() as policy_tape,tf.GradientTape() as baseline_tape:
+            action_probs = self.model(states)  # (batch_size, num_actions)
+            action_probs = tf.reduce_sum(action_probs * tf.one_hot(actions, self.output_shape[0]), axis=1)
             action_probs = tf.clip_by_value(action_probs, 1e-10, 1.0)
             log_probs = tf.math.log(action_probs)
             baseline_values = tf.squeeze(self.baseline_model(states), axis=-1)  # (batch_size,)
@@ -48,15 +48,14 @@ class ReinforceAgent:
             policy_loss = -tf.reduce_mean(log_probs * advantages)
             baseline_loss = tf.reduce_mean(tf.square(advantages))
 
-        policy_grads = tape.gradient(policy_loss, self.model.trainable_variables)
-        policy_grads = [tf.clip_by_value(grad, -1.0, 1.0) for grad in policy_grads]
+        policy_grads = policy_tape.gradient(policy_loss, self.model.trainable_variables)
+        policy_grads = [tf.clip_by_value(grad, -5.0, 5.0) for grad in policy_grads]
         self.optimizer.apply_gradients(zip(policy_grads, self.model.trainable_variables))
 
-        baseline_grads = tape.gradient(baseline_loss, self.baseline_model.trainable_variables)
-        baseline_grads = [tf.clip_by_value(grad, -1.0, 1.0) for grad in baseline_grads]
+        baseline_grads = baseline_tape.gradient(baseline_loss, self.baseline_model.trainable_variables)
+        baseline_grads = [tf.clip_by_value(grad, -5.0, 5.0) for grad in baseline_grads]
         self.baseline_optimizer.apply_gradients(zip(baseline_grads, self.baseline_model.trainable_variables))
         return policy_loss + baseline_loss
-
     
     def _compute_returns(self, rewards):
         returns = np.zeros_like(rewards)

@@ -88,8 +88,8 @@ def session(num_steps=NUM_TRAINING_STEPS):
                                gamma=GAMMA,
                                buffer_size=BUFFER_SIZE,
                                tau=TAU)
-    epsilons = create_epsilons(num_steps,fraction=0.25)
-    num_steps_to_train_for = int(1e+3)
+    epsilons = create_epsilons(num_steps,fraction=0.4)
+    num_steps_to_train_for = int(1e+4)
 
     os.makedirs('rewards', exist_ok=True)
     os.makedirs('models', exist_ok=True)

@@ -20,25 +20,39 @@ if gpus:
         
 def train(environment, agent, step, writer, num_steps=1000):
     state = environment.reset()
+    done_flags = np.zeros(environment.num_envs, dtype=bool)
+    agent.trajectory_buffer.reset()
+    train_time = 0
     for _ in range(0, num_steps):
         current_step = _ + step - 1
         actions = agent.act(state)
         next_state, rewards, dones, info = environment.step(actions)
-        agent.trajectory_buffer.add(state, actions, rewards)
+        agent.trajectory_buffer.add(state, actions, rewards, dones)
         state = next_state
-        if np.any(dones):
-            for i in range(environment.num_envs):
-                if dones[i]:
-                    states, actions, rewards = agent.trajectory_buffer.get_buffer(i)
+        for i in range(environment.num_envs):
+            done_flags[i] = done_flags[i] or dones[i]
+        if np.all(done_flags):
+            train_time += 1
+            done_flags = np.zeros(environment.num_envs, dtype=bool)
+            trajectories = agent.trajectory_buffer.pop_first_trajectories()
+            trajectories = agent.trajectory_buffer.trajectories_to_numpy(trajectories)
+            states_concat, actions_concat, rewards_concat = [], [], []
+            for traj in trajectories:
+                states, actions, rewards = traj
+                if len(states) > 0:
                     returns = agent._compute_returns(rewards).astype(np.float32)
-                    loss = agent.learn(states, actions, returns)
-                    agent.trajectory_buffer.clear(i)
-                    with writer.as_default():
-                        tf.summary.scalar('loss', loss, step=current_step)
-                    print(
-                        f"\rTraining step: [{_}/{num_steps}] \tLoss: {loss.numpy():.4f}", end='')
-                    sys.stdout.flush()
-    agent.trajectory_buffer.reset()
+                    states_concat.append(states)
+                    actions_concat.append(actions)
+                    rewards_concat.append(returns)
+            states = np.concatenate(states_concat, axis=0)
+            actions = np.concatenate(actions_concat, axis=0)
+            returns = np.concatenate(rewards_concat, axis=0)
+            loss = agent.learn(states, actions, returns)
+            with writer.as_default():
+                tf.summary.scalar('loss', loss, step=current_step)
+            print(
+                f"\rTraining step: [{_}/{num_steps}] \tLoss: {loss.numpy():.4f} \t train: {train_time}", end='')
+            sys.stdout.flush()
     return agent
 
 def test(environment, agent, num_steps=int(1e+4)):
@@ -81,7 +95,7 @@ def session(num_steps=NUM_TRAINING_STEPS):
                                num_envs=NUM_ENVS,
                                learning_rate=ALPHA,
                                gamma=GAMMA)
-    num_steps_to_train_for = int(1e+3)
+    num_steps_to_train_for = int(1e+4)
 
     os.makedirs('rewards', exist_ok=True)
     os.makedirs('models', exist_ok=True)

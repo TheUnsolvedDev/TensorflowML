@@ -38,7 +38,7 @@ class PolicyGradientAgent:
     def learn(self, states, actions, returns):
         with tf.GradientTape() as tape:
             action_probs = self.model(states)
-            action_probs = tf.gather(action_probs, actions, batch_dims=1)
+            action_probs = tf.reduce_sum(action_probs * tf.one_hot(actions, self.output_shape[0]), axis=1)
             action_probs = tf.clip_by_value(action_probs, 1e-10, 1.0)
             log_probs = tf.math.log(action_probs)
             loss = -tf.reduce_mean(log_probs * returns)

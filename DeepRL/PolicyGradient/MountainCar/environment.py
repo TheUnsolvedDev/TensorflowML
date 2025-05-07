@@ -50,7 +50,7 @@ def simulate(steps=1000):
     env = Environment(num_envs=NUM_ENVS)
     state = env.reset()
     for _ in range(steps):
-        actions = np.random.randint(low=0, high=2, size=(env.num_envs,))
+        actions = np.random.randint(low=0, high=ENV_OUTPUT_SHAPE[0], size=(env.num_envs,))
         next_state, rewards, dones, info = env.step(actions)
         state = next_state
         if np.any(dones):

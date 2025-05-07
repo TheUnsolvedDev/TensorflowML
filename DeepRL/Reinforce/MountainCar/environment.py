@@ -3,26 +3,23 @@ import numpy as np
 
 from config import *
 
-class MountainCarRewardShapingVec(gym.vector.VectorWrapper):
+class MountainCarRewardWrapper(gym.vector.VectorRewardWrapper):
     def __init__(self, env):
         super().__init__(env)
-        self.goal_position = 0.5
+        self.prev_pos = None
 
-    def step(self, actions):
-        obs, rewards, terminated, truncated, infos = self.env.step(actions)
-        positions = obs[:, 0]
-        velocities = obs[:, 1]
+    def reset(self, **kwargs):
+        obs, info = self.env.reset(**kwargs)
+        self.prev_pos = obs[..., 0]  # track position
+        return obs, info
 
-        # Potential shaping: reward progress
-        potential = (positions - (-1.2)) / (self.goal_position - (-1.2))  # normalized [0, 1]
-        shaped_rewards = rewards + 1.5 * potential + 0.5 * np.abs(velocities)
-
-        # Optional: Add bonus for solving
-        solved = positions >= self.goal_position
-        shaped_rewards += solved * 10.0
-
-        return obs, shaped_rewards, terminated, truncated, infos
-
+    def step(self, action):
+        obs, reward, terminated, truncated, info = self.env.step(action)
+        # Encourage progress toward goal
+        pos = obs[..., 0]
+        shaped_reward = reward + (pos - self.prev_pos) * 10.0
+        self.prev_pos = pos
+        return obs, shaped_reward, terminated, truncated, info
 
 class Environment:
     def __init__(self, name=ENV_NAME, num_envs=NUM_ENVS):
@@ -31,10 +28,9 @@ class Environment:
         if self.num_envs > 1:
             self.envs = gym.make_vec(
                 name, num_envs=self.num_envs, vectorization_mode='async')
-            self.envs = MountainCarRewardShapingVec(self.envs)
+            self.envs = MountainCarRewardWrapper(self.envs) 
         else:
             self.envs = gym.make(name)#, render_mode='human')
-            # self.envs = MountainCarRewardShaping(self.envs)
             self.envs = gym.wrappers.Autoreset(self.envs)
 
     def reset(self):

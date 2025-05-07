@@ -6,16 +6,19 @@ from model import *
 from config import *
 from buffer import *
 
+
 class PolicyGradientAgent:
-    def __init__(self,input_shape=ENV_INPUT_SHAPE,output_shape=ENV_OUTPUT_SHAPE,num_envs=NUM_ENVS,learning_rate=ALPHA,gamma=GAMMA):
+    def __init__(self, input_shape=ENV_INPUT_SHAPE, output_shape=ENV_OUTPUT_SHAPE, num_envs=NUM_ENVS, learning_rate=ALPHA, gamma=GAMMA):
         self.input_shape = input_shape
         self.output_shape = output_shape
         self.num_envs = num_envs
         self.learning_rate = learning_rate
         self.gamma = gamma
-        
-        self.model = PolicyModel(input_shape=self.input_shape,output_shape=self.output_shape)
-        self.optimizer = tf.keras.optimizers.Adam(learning_rate=self.learning_rate)
+
+        self.model = PolicyModel(
+            input_shape=self.input_shape, output_shape=self.output_shape)
+        self.optimizer = tf.keras.optimizers.Adam(
+            learning_rate=self.learning_rate)
         self.trajectory_buffer = TrajectoryBuffer(num_envs=self.num_envs)
 
     @tf.function
@@ -33,21 +36,26 @@ class PolicyGradientAgent:
         else:
             actions = [np.random.choice(p.shape[-1], p=p) for p in probs]
             return np.array(actions)
-    
+
     @tf.function
     def learn(self, states, actions, returns):
         with tf.GradientTape() as tape:
             action_probs = self.model(states)
+            entropy = -tf.reduce_sum(action_probs * tf.math.log(
+                tf.clip_by_value(action_probs, 1e-10, 1.0)), axis=1)
             action_probs = tf.gather(action_probs, actions, batch_dims=1)
             action_probs = tf.clip_by_value(action_probs, 1e-10, 1.0)
             log_probs = tf.math.log(action_probs)
             loss = -tf.reduce_mean(log_probs * returns)
-        
+            entropy_loss = -tf.reduce_mean(entropy)
+            loss += 0.1*entropy_loss
+
         grads = tape.gradient(loss, self.model.trainable_variables)
-        grads = [tf.clip_by_value(grad, -1.0, 1.0) for grad in grads]
-        self.optimizer.apply_gradients(zip(grads, self.model.trainable_variables))
+        grads = [tf.clip_by_value(grad, -5.0, 5.0) for grad in grads]
+        self.optimizer.apply_gradients(
+            zip(grads, self.model.trainable_variables))
         return loss
-    
+
     def _compute_returns(self, rewards):
         returns = np.zeros_like(rewards)
         cumulative_return = 0
@@ -56,13 +64,13 @@ class PolicyGradientAgent:
             returns[t] = cumulative_return
         returns = (returns - np.mean(returns)) / (np.std(returns) + 1e-8)
         return returns
-    
+
     def save_model(self):
         if not os.path.exists('models'):
             os.makedirs('models')
         path = 'models/model_weights.weights.h5'
         self.model.save_weights(path)
-        
+
     def load_model(self):
         path = 'models/model_weights.weights.h5'
         if not os.path.exists(path):
