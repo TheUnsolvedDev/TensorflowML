@@ -1,0 +1,1 @@
+python3 train_and_test.py --resume --use_backbone --freeze_backbone

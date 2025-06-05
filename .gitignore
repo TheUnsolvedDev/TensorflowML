@@ -30,3 +30,4 @@ GPU_tf/
 /NaturalLanguageProcessing/TextGeneration/EncoderDecoder/dataset.txt
 /NaturalLanguageProcessing/TextGeneration/GeneratedPretrainedTransformer/dataset.txt
 /NaturalLanguageProcessing/TextGeneration/Transformer/dataset.txt
+/ComputerVision/ObjectDetection/coco

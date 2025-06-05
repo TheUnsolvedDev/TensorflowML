@@ -1,0 +1,11 @@
+## Diffusion Models
+- [ ] **2015** – Diffusion Probabilistic Models (Original theory by Sohl-Dickstein et al.)  
+- [ ] **2020** – DDPM (Denoising Diffusion Probabilistic Models by Ho et al.)  
+- [ ] **2021** – Improved DDPM (Classifier-free guidance, better sampling)  
+- [ ] **2021** – DDIM (Deterministic Denoising Implicit Models)  
+- [ ] **2022** – GLIDE (Guided language diffusion for image generation)  
+- [ ] **2022** – Imagen (Text-to-image diffusion by Google)  
+- [ ] **2022** – DALLE-2 (CLIP-guided diffusion from OpenAI)  
+- [ ] **2022** – Stable Diffusion (Latent diffusion + open-source framework)  
+- [ ] **2023** – ControlNet (Conditioning Stable Diffusion on additional inputs)  
+- [ ] **2023** – Consistency Models (Faster inference without reverse process)  

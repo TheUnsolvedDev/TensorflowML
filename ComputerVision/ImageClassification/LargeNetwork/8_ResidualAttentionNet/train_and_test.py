@@ -9,7 +9,7 @@ from model import *
 
 
 def main():
-    model_fn = residual_attention_model
+    model_fn = vgg11_A_LRN_model
     parser = argparse.ArgumentParser(description='Select GPU[0-3]:')
     parser.add_argument('--gpu', type=int, default=0,
                         help='GPU number')

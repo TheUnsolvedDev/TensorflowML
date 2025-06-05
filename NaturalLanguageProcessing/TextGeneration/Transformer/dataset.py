@@ -1,11 +1,7 @@
 import tensorflow as tf
 import os
-from config import VOCAB_SIZE, MAX_LEN, BATCH_SIZE
+from config import *
 
-# Fallback defaults
-VOCAB_SIZE = VOCAB_SIZE if 'VOCAB_SIZE' in locals() else 20000
-MAX_LEN = MAX_LEN if 'MAX_LEN' in locals() else 128
-BATCH_SIZE = BATCH_SIZE if 'BATCH_SIZE' in locals() else 64
 
 
 def custom_standardization(input_text):

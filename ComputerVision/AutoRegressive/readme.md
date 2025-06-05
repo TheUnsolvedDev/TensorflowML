@@ -1,0 +1,10 @@
+## Autoregressive Models
+- [ ] **2013** – NADE (Neural Autoregressive Distribution Estimator)  
+- [ ] **2014** – DRAW (Deep Recurrent Attentive Writer)  
+- [ ] **2016** – PixelRNN (RNN-based image generation)  
+- [ ] **2016** – PixelCNN (CNN-based autoregressive model)  
+- [ ] **2017** – PixelCNN++ (Improved likelihood and image quality)  
+- [ ] **2018** – Transformer (Introduced autoregression for sequences)  
+- [ ] **2020** – GPT-2/3 (Autoregressive language modeling with Transformers)  
+- [ ] **2022** – ImageGPT (Adapting GPT for image generation)  
+- [ ] **2022** – VQ-GAN + Transformer (Combines discrete VAE + autoregression)  

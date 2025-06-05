@@ -46,7 +46,7 @@ class TextGenerator:
 
             pad_len = self.max_length - vec.shape[1]
             if pad_len > 0:
-                padding = tf.zeros((1, pad_len), dtype=tf.int64)
+                padding = tf.zeros((1, pad_len), dtype=tf.int32)
                 vec = tf.concat([padding, vec], axis=1)
 
             preds = self.model(vec, training=False)
